@@ -157,10 +157,11 @@ const renderHistory = (messages = []) => {
       const contentHtml = renderMarkdown(item.content || "");
       const cost = formatCost(item?.meta?.costRubFinal, "RUB");
       const costHtml = cost ? `<div class="message-meta">Стоимость: ${cost}</div>` : "";
+      const hasCost = false
       return `<div class="${roleClass}">
         <span class="role">${roleLabel}:</span>
         <div class="markdown">${contentHtml}</div>
-        ${costHtml}
+        ${hasCost ? costHtml : ""}
       </div>`;
     })
     .join("");
