@@ -1,0 +1,13 @@
+{
+  "name": "kimi-k2-simple-api",
+  "version": "1.0.0",
+  "description": "Minimal API and UI for Kimi K2 Thinking via ProxyAPI OpenRouter",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2"
+  }
+}

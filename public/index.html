@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kimi K2 Thinking — простой клиент</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>Kimi K2 Thinking</h1>
+      </header>
+
+      <div class="layout">
+        <aside class="sidebar">
+          <button id="new-chat" type="button">Новый диалог</button>
+          <div class="field">
+            System (для нового диалога)
+            <textarea id="system" rows="2" placeholder="Контекст или роль ассистента"></textarea>
+          </div>
+          <ul id="chat-list"></ul>
+        </aside>
+
+        <section class="chat">
+          <div id="history" class="history"></div>
+
+          <form id="chat-form">
+            <label class="field">
+              Сообщение
+              <textarea id="message" rows="3" placeholder="Напишите запрос"></textarea>
+            </label>
+            <button id="send" type="submit">Отправить</button>
+          </form>
+        </section>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js" defer></script>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
