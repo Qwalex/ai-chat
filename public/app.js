@@ -97,6 +97,16 @@ const renderMarkdown = (value) => {
   return escapeHtml(value).replaceAll("\n", "<br />");
 };
 
+const formatCost = (value, currency) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+  if (currency === "RUB") {
+    return `${value.toFixed(2)} ₽`;
+  }
+  return `$${value.toFixed(6)}`;
+};
+
 const applyHighlighting = () => {
   if (!window.hljs || !history) {
     return;
@@ -145,9 +155,12 @@ const renderHistory = (messages = []) => {
       const roleClass = item.role === "user" ? "bubble user" : "bubble assistant";
       const roleLabel = item.role === "user" ? "Вы" : "Ассистент";
       const contentHtml = renderMarkdown(item.content || "");
+      const cost = formatCost(item?.meta?.costRubFinal, "RUB");
+      const costHtml = cost ? `<div class="message-meta">Стоимость: ${cost}</div>` : "";
       return `<div class="${roleClass}">
         <span class="role">${roleLabel}:</span>
         <div class="markdown">${contentHtml}</div>
+        ${costHtml}
       </div>`;
     })
     .join("");

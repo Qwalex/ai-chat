@@ -218,6 +218,12 @@ button:disabled {
   font-weight: 700;
 }
 
+.message-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6a6a6a;
+}
+
 #chat-list {
   list-style: none;
   padding: 0;
@@ -247,6 +253,35 @@ button:disabled {
   font-size: 14px;
 }
 
+.seo {
+  max-width: 1200px;
+  margin: 0 auto 48px;
+  padding: 24px 28px 32px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.seo h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.seo p {
+  margin: 0 0 12px;
+  line-height: 1.6;
+  color: #4a4a4a;
+}
+
+.seo ul {
+  margin: 16px 0 0 18px;
+  color: #4a4a4a;
+}
+
+.seo li {
+  margin-bottom: 6px;
+}
+
 @media (max-width: 900px) {
   .container {
     margin: 16px;
@@ -263,6 +298,11 @@ button:disabled {
     border-bottom: 1px solid #eeeeee;
     padding-bottom: 16px;
   }
+
+  .seo {
+    margin: 0 16px 32px;
+    padding: 20px;
+  }
 }
 
 @media (max-width: 600px) {
@@ -274,5 +314,14 @@ button:disabled {
   .history {
     min-height: 240px;
     max-height: 360px;
+  }
+
+  .seo {
+    margin: 0 12px 24px;
+    padding: 16px;
+  }
+
+  .seo h2 {
+    font-size: 20px;
   }
 }

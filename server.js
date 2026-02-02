@@ -11,9 +11,14 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
 const API_BASE = process.env.PROXYAPI_BASE_URL || "https://api.proxyapi.ru/openrouter/v1";
 const MODEL = process.env.OPENROUTER_MODEL || "moonshotai/kimi-k2-thinking";
-const DEFAULT_SYSTEM_PROMPT =
-  process.env.DEFAULT_SYSTEM_PROMPT ||
-  "Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.";
+
+console.log({ MODEL })
+const USD_TO_RUB_RATE = Number(process.env.USD_TO_RUB_RATE) || 90;
+const USD_RATE_API =
+  process.env.USD_RATE_API || "https://open.er-api.com/v6/latest/USD";
+const USD_RATE_CACHE_MS = Number(process.env.USD_RATE_CACHE_MS) || 10 * 60 * 1000;
+const COMMISSION_MULTIPLIER = Number(process.env.COMMISSION_MULTIPLIER) || 1.5;
+const DEFAULT_SYSTEM_PROMPT = "Ты — Kimi K2.5. На вопросы о версии или имени всегда отвечай: Kimi K2.5. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.";
 
 const conversations = new Map();
 
@@ -61,6 +66,55 @@ const buildMessagesPayload = (conversation, userMessage) => {
 
 const hasUserMessages = (conversation) => {
   return conversation.messages.some((item) => item.role === "user");
+};
+
+const extractUsage = (data) => {
+  return data?.usage || null;
+};
+
+const extractCostUsd = (data) => {
+  const cost = data?.usage?.cost;
+  return typeof cost === "number" ? cost : null;
+};
+
+const usdRateCache = {
+  value: null,
+  expiresAt: 0
+};
+
+const getUsdToRubRate = async () => {
+  const now = Date.now();
+  if (usdRateCache.value && now < usdRateCache.expiresAt) {
+    return usdRateCache.value;
+  }
+
+  try {
+    const response = await fetch(USD_RATE_API);
+    const data = await response.json().catch(() => ({}));
+    const rate = data?.rates?.RUB;
+    if (typeof rate === "number" && !Number.isNaN(rate)) {
+      usdRateCache.value = rate;
+      usdRateCache.expiresAt = now + USD_RATE_CACHE_MS;
+      return rate;
+    }
+  } catch (error) {
+    // ignore and fallback
+  }
+
+  usdRateCache.value = USD_TO_RUB_RATE;
+  usdRateCache.expiresAt = now + USD_RATE_CACHE_MS;
+  return USD_TO_RUB_RATE;
+};
+
+const calculateRub = (costUsd, rate, multiplier) => {
+  if (typeof costUsd !== "number" || Number.isNaN(costUsd)) {
+    return { costRub: null, costRubFinal: null };
+  }
+  const costRub = costUsd * rate;
+  return {
+    costRub,
+    costRubFinal: costRub * multiplier
+  };
 };
 
 const normalizeTitle = (value) => {
@@ -174,8 +228,16 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
     }
 
     const text = data?.choices?.[0]?.message?.content ?? "";
+    const usage = extractUsage(data);
+    const costUsd = extractCostUsd(data);
+    const rate = await getUsdToRubRate();
+    const { costRub, costRubFinal } = calculateRub(costUsd, rate, COMMISSION_MULTIPLIER);
     conversation.messages.push({ role: "user", content: message });
-    conversation.messages.push({ role: "assistant", content: text });
+    conversation.messages.push({
+      role: "assistant",
+      content: text,
+      meta: { costUsd, costRub, costRubFinal, rate, usage }
+    });
     conversation.updatedAt = new Date().toISOString();
 
     if (isFirstUserMessage && conversation.title === "Новый диалог") {
@@ -184,7 +246,16 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
       conversation.updatedAt = new Date().toISOString();
     }
 
-    return res.json({ text, conversation, raw: data });
+    return res.json({
+      text,
+      conversation,
+      costUsd,
+      costRub,
+      costRubFinal,
+      rate,
+      usage,
+      raw: data
+    });
   } catch (error) {
     return res.status(500).json({ error: "Request failed" });
   }
@@ -231,7 +302,11 @@ app.post("/api/chat", async (req, res) => {
     }
 
     const text = data?.choices?.[0]?.message?.content ?? "";
-    return res.json({ text, raw: data });
+    const usage = extractUsage(data);
+    const costUsd = extractCostUsd(data);
+    const rate = await getUsdToRubRate();
+    const { costRub, costRubFinal } = calculateRub(costUsd, rate, COMMISSION_MULTIPLIER);
+    return res.json({ text, costUsd, costRub, costRubFinal, rate, usage, raw: data });
   } catch (error) {
     return res.status(500).json({ error: "Request failed" });
   }
