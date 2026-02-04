@@ -70,13 +70,71 @@ const buildModelPageSeo = (label) => ({
   ]
 });
 
+/** Краткое описание модели для блока ссылок на главной (по смыслу с openrouter.ai/models) */
+const MODEL_SHORT_DESCRIPTIONS = {
+  "moonshotai/kimi-k2.5:nitro":
+    "Moonshot AI: развёрнутые объяснения, диалог, творческие задачи.",
+  "deepseek/deepseek-v3.2:nitro":
+    "Аналитика, программирование, точные формулировки. Сильный в коде.",
+  "qwen/qwen3-coder-next:nitro":
+    "Оптимизирована для кода и агентов. Длинный контекст, надёжность в CLI и IDE.",
+  "deepseek/deepseek-v3.2-speciale:nitro":
+    "Максимум рассуждений и агентных сценариев. Высокая точность на сложных задачах.",
+  "stepfun/step-3.5-flash:free":
+    "Рассуждения, MoE-архитектура. Быстрая и эффективная модель. Бесплатно.",
+  "arcee-ai/trinity-large-preview:free":
+    "Креатив, сторителлинг, ролевые сценарии. Крупная MoE. Бесплатно.",
+  "minimax/minimax-m2-her:nitro":
+    "Диалог, ролевые сценарии, выразительные многотуровые разговоры.",
+  "writer/palmyra-x5:nitro":
+    "Агенты, длинный контекст до 1M токенов. Скорость и масштаб для enterprise.",
+  "openai/gpt-5.2-codex:nitro":
+    "Программирование: интерактивная разработка, рефакторинг, код-ревью.",
+  "z-ai/glm-4.7:nitro":
+    "Улучшенный код и рассуждения. Стабильное выполнение многошаговых задач.",
+  "mistralai/mistral-small-creative:nitro":
+    "Креативные тексты, нарративы, ролевые сценарии. Экспериментальная компактная модель.",
+  "xiaomi/mimo-v2-flash:nitro":
+    "Рассуждения, код, агенты. Гибридное мышление, топ среди open-source по SWE-bench.",
+  "nvidia/nemotron-3-nano-30b-a3b:nitro":
+    "Компактный MoE для агентных систем. Высокая эффективность и точность.",
+  "openai/gpt-5.2-chat:nitro":
+    "Быстрый чат, низкая задержка. Адаптивные рассуждения на сложных запросах.",
+  "amazon/nova-2-lite-v1:nitro":
+    "Рассуждения для повседневных задач. Текст, изображения, видео. Экономичная модель."
+};
+
 const MODEL_PAGES = ALLOWED_MODELS.map((m) => ({
   id: m.id,
   label: m.label,
   slug: slugFromModelId(m.id),
+  shortDesc: MODEL_SHORT_DESCRIPTIONS[m.id] || `Чат с ${m.label}. Структурированные ответы, подсветка кода.`,
   seo: buildModelPageSeo(m.label)
 }));
 const MODEL_PAGE_BY_SLUG = new Map(MODEL_PAGES.map((p) => [p.slug, p]));
+
+const escapeHtmlAttr = (s) =>
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+/** HTML блока со ссылками на страницы моделей для главной */
+const buildModelLinksBlockHtml = () => {
+  const items = MODEL_PAGES.map(
+    (p) =>
+      `<li class="model-link-item">
+        <a href="/model/${escapeHtmlAttr(p.slug)}">${escapeHtmlAttr(p.label)}</a>
+        <p class="model-link-desc">${escapeHtmlAttr(p.shortDesc)}</p>
+      </li>`
+  ).join("\n");
+  return `<section class="model-links" id="model-links">
+  <h2>Модели в чате</h2>
+  <p class="model-links-intro">Перейдите на страницу модели — там свой SEO-текст и модель выбрана по умолчанию.</p>
+  <ul class="model-links-list">${items}</ul>
+</section>`;
+};
 
 const getModel = (modelFromRequest) => {
   if (modelFromRequest && ALLOWED_MODEL_IDS.includes(modelFromRequest)) {
@@ -356,6 +414,19 @@ const generateTitle = async ({ model, message }) => {
 app.use(express.json({ limit: "20mb" }));
 
 const INDEX_HTML_PATH = path.join(__dirname, "public", "index.html");
+const MODEL_LINKS_PLACEHOLDER = "{{MODEL_LINKS_BLOCK}}";
+
+app.get("/", (req, res) => {
+  let html;
+  try {
+    html = fs.readFileSync(INDEX_HTML_PATH, "utf8");
+  } catch (err) {
+    return res.status(500).send("Index not found");
+  }
+  html = html.replace(MODEL_LINKS_PLACEHOLDER, buildModelLinksBlockHtml());
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
 
 app.get("/model/:slug", (req, res) => {
   const page = MODEL_PAGE_BY_SLUG.get(req.params.slug);
@@ -400,6 +471,7 @@ app.get("/model/:slug", (req, res) => {
     /<script src="\/app\.js" defer><\/script>/,
     defaultModelScript + '<script src="/app.js" defer></script>'
   );
+  html = html.replace(MODEL_LINKS_PLACEHOLDER, buildModelLinksBlockHtml());
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
 });
