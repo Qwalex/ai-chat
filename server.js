@@ -15,6 +15,7 @@ const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
 const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const UPLOADS_DIR = path.join(__dirname, "public", "uploads");
+const IMAGES_DIR = path.join(__dirname, "public", "images");
 
 try {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -477,6 +478,7 @@ app.get("/model/:slug", (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/images", express.static(IMAGES_DIR, { maxAge: "1d" }));
 
 const mimeToExt = {
   "image/jpeg": ".jpg",
