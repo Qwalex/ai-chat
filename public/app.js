@@ -5,14 +5,25 @@ const sendButton = document.querySelector("#send");
 const history = document.querySelector("#history");
 const chatList = document.querySelector("#chat-list");
 const newChatButton = document.querySelector("#new-chat");
+const modelSelect = document.querySelector("#model");
+const imageUploadWrap = document.querySelector("#image-upload-wrap");
+const imageInput = document.querySelector("#image-input");
+const imagePreviews = document.querySelector("#image-previews");
+
+const IMAGE_MODEL_ID = "google/gemini-3-pro-image-preview";
 
 let currentConversationId = null;
+let selectedImageFiles = [];
 let lastMessages = [];
 const pendingById = new Set();
 const messageCacheById = new Map();
 const pendingMessagesById = new Map();
 
+const MAX_SEND_RETRIES = 5;
+const RETRY_DELAY_MS = 1500;
+
 const SESSION_KEY = "kimiChatSession";
+const MODEL_KEY = "chatModel";
 
 const loadSessionState = () => {
   try {
@@ -56,6 +67,93 @@ const addConversationToSession = (id) => {
     return;
   }
   setActiveConversation(id);
+};
+
+const loadSelectedModel = () => {
+  try {
+    return sessionStorage.getItem(MODEL_KEY) || "";
+  } catch (error) {
+    return "";
+  }
+};
+
+const saveSelectedModel = (modelId) => {
+  try {
+    sessionStorage.setItem(MODEL_KEY, modelId);
+  } catch (error) {
+    // ignore
+  }
+};
+
+const getSelectedModel = () => {
+  if (!modelSelect || modelSelect.options.length === 0) {
+    return "";
+  }
+  const saved = loadSelectedModel();
+  for (let i = 0; i < modelSelect.options.length; i++) {
+    if (modelSelect.options[i].value === saved) {
+      return saved;
+    }
+  }
+  return modelSelect.options[0].value;
+};
+
+const isImageModelSelected = () => getSelectedModel() === IMAGE_MODEL_ID;
+
+const updateImageUploadVisibility = () => {
+  if (!imageUploadWrap) {
+    return;
+  }
+  if (isImageModelSelected()) {
+    imageUploadWrap.classList.remove("hidden");
+  } else {
+    imageUploadWrap.classList.add("hidden");
+    selectedImageFiles = [];
+    renderImagePreviews();
+  }
+};
+
+const renderImagePreviews = () => {
+  if (!imagePreviews) {
+    return;
+  }
+  if (selectedImageFiles.length === 0) {
+    imagePreviews.innerHTML = "";
+    return;
+  }
+  imagePreviews.innerHTML = selectedImageFiles
+    .map(
+      (file, index) =>
+        `<span class="image-preview-item" data-index="${index}">
+          <img class="image-preview-thumb" src="${escapeHtml(URL.createObjectURL(file))}" alt="" />
+          <button type="button" class="image-preview-remove" data-index="${index}" aria-label="Удалить">×</button>
+        </span>`
+    )
+    .join("");
+};
+
+const readFilesAsDataUrls = (files) => {
+  if (!files || files.length === 0) {
+    return Promise.resolve([]);
+  }
+  const promises = Array.from(files).map(
+    (file) =>
+      new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      })
+  );
+  return Promise.all(promises).then((urls) => urls.filter(Boolean));
+};
+
+const clearImageSelection = () => {
+  selectedImageFiles = [];
+  renderImagePreviews();
+  if (imageInput) {
+    imageInput.value = "";
+  }
 };
 
 const escapeHtml = (value) => {
@@ -141,6 +239,30 @@ const endRequest = (conversationId) => {
   renderHistory(lastMessages);
 };
 
+const renderUserContent = (content) => {
+  if (typeof content === "string") {
+    return renderMarkdown(content);
+  }
+  if (!Array.isArray(content)) {
+    return renderMarkdown("");
+  }
+  const parts = [];
+  for (const part of content) {
+    if (part.type === "text" && part.text) {
+      parts.push(renderMarkdown(part.text));
+    }
+    if (part.type === "image_url") {
+      const imgUrl = part.imageUrl?.url || part.image_url?.url;
+      if (imgUrl) {
+        parts.push(
+          `<img class="msg-thumb" src="${escapeHtml(imgUrl)}" alt="" loading="lazy" />`
+        );
+      }
+    }
+  }
+  return parts.join("");
+};
+
 const renderHistory = (messages = []) => {
   const isTyping = currentConversationId && pendingById.has(currentConversationId);
 
@@ -154,14 +276,22 @@ const renderHistory = (messages = []) => {
     .map((item) => {
       const roleClass = item.role === "user" ? "bubble user" : "bubble assistant";
       const roleLabel = item.role === "user" ? "Вы" : "Ассистент";
-      const contentHtml = renderMarkdown(item.content || "");
+      const contentHtml =
+        item.role === "user"
+          ? renderUserContent(item.content)
+          : renderMarkdown(item.content || "");
       const cost = formatCost(item?.meta?.costRubFinal, "RUB");
       const costHtml = cost ? `<div class="message-meta">Стоимость: ${cost}</div>` : "";
-      const hasCost = false
+      const hasCost = false;
+      const retryBtn =
+        item.role === "assistant" && item.retryable
+          ? `<button type="button" class="retry-send-btn">Повторить отправку</button>`
+          : "";
       return `<div class="${roleClass}">
         <span class="role">${roleLabel}:</span>
         <div class="markdown">${contentHtml}</div>
         ${hasCost ? costHtml : ""}
+        ${retryBtn}
       </div>`;
     })
     .join("");
@@ -208,6 +338,32 @@ const renderChatList = (conversations = []) => {
       </li>`;
     })
     .join("");
+};
+
+const loadModels = async () => {
+  if (!modelSelect) {
+    return;
+  }
+  const response = await fetch("/api/models");
+  const data = await response.json().catch(() => ({}));
+  const models = data?.models || [];
+  modelSelect.innerHTML = models
+    .map(
+      (m) =>
+        `<option value="${escapeHtml(m.id)}">${escapeHtml(m.label || m.id)}</option>`
+    )
+    .join("");
+  const saved = loadSelectedModel();
+  if (saved) {
+    const found = models.some((m) => m.id === saved);
+    if (found) {
+      modelSelect.value = saved;
+    }
+  }
+  if (modelSelect.options.length > 0 && !modelSelect.value) {
+    modelSelect.selectedIndex = 0;
+    saveSelectedModel(modelSelect.value);
+  }
 };
 
 const loadConversations = async () => {
@@ -267,11 +423,18 @@ const createConversation = async (system) => {
   return data.conversation;
 };
 
-const appendUserMessage = (conversationId, message) => {
+const appendUserMessage = (conversationId, message, imageUrls = []) => {
   if (!conversationId) {
     return;
   }
-  const nextMessage = { role: "user", content: message };
+  const content =
+    imageUrls.length > 0
+      ? [
+          { type: "text", text: message },
+          ...imageUrls.map((url) => ({ type: "image_url", imageUrl: { url } }))
+        ]
+      : message;
+  const nextMessage = { role: "user", content };
   const pendingMessages = getPendingMessages(conversationId);
   pendingMessagesById.set(conversationId, [...pendingMessages, nextMessage]);
   const cached = messageCacheById.get(conversationId) || [];
@@ -279,7 +442,9 @@ const appendUserMessage = (conversationId, message) => {
   updateHistory(nextMessages, conversationId);
 };
 
-const sendMessage = async ({ message, system }) => {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const sendMessage = async ({ message, system, images: imageUrls = [] }) => {
   let conversationId = currentConversationId;
 
   try {
@@ -292,42 +457,133 @@ const sendMessage = async ({ message, system }) => {
     }
 
     conversationId = currentConversationId;
-    appendUserMessage(conversationId, message);
+    appendUserMessage(conversationId, message, imageUrls);
     startRequest(conversationId);
 
-    const response = await fetch(`/api/conversations/${conversationId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message })
-    });
+    let lastResponse = null;
+    let lastData = {};
+    let lastError = null;
 
-    const data = await response.json().catch(() => ({}));
+    for (let attempt = 1; attempt <= MAX_SEND_RETRIES; attempt++) {
+      try {
+        const model = getSelectedModel();
+        const response = await fetch(
+          `/api/conversations/${conversationId}/messages`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message,
+              model: model || undefined,
+              images: imageUrls.length ? imageUrls : undefined
+            })
+          }
+        );
+        lastResponse = response;
+        lastData = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      const cachedMessages = messageCacheById.get(conversationId) || [];
-      updateHistory([
-        ...cachedMessages,
-        { role: "assistant", content: data?.error || "Ошибка запроса." }
-      ], conversationId);
-      return;
+        if (response.ok) {
+          pendingMessagesById.delete(conversationId);
+          updateHistory(lastData.conversation.messages, conversationId);
+          await loadConversations();
+          messageInput.value = "";
+          systemInput.disabled = true;
+          clearImageSelection();
+          updateSendButton();
+          return;
+        }
+
+        lastError = lastData?.error || "Ошибка запроса.";
+        if (attempt < MAX_SEND_RETRIES) {
+          await sleep(RETRY_DELAY_MS);
+        }
+      } catch (err) {
+        lastError = "Ошибка соединения с сервером.";
+        if (attempt < MAX_SEND_RETRIES) {
+          await sleep(RETRY_DELAY_MS);
+        }
+      }
     }
 
-    pendingMessagesById.delete(conversationId);
-    updateHistory(data.conversation.messages, conversationId);
-    await loadConversations();
-    messageInput.value = "";
-    systemInput.disabled = true;
-    updateSendButton();
+    const errorText =
+      typeof lastError === "string"
+        ? lastError
+        : "Запрос не удался после нескольких попыток.";
+    const cachedMessages = messageCacheById.get(conversationId) || [];
+    updateHistory(
+      [
+        ...cachedMessages,
+        {
+          role: "assistant",
+          content: `${errorText} (попыток: ${MAX_SEND_RETRIES})`,
+          retryable: true
+        }
+      ],
+      conversationId
+    );
   } catch (error) {
     const cachedMessages = messageCacheById.get(conversationId) || [];
-    updateHistory([
-      ...cachedMessages,
-      { role: "assistant", content: "Ошибка соединения с сервером." }
-    ], conversationId);
+    updateHistory(
+      [
+        ...cachedMessages,
+        {
+          role: "assistant",
+          content: "Ошибка соединения с сервером.",
+          retryable: true
+        }
+      ],
+      conversationId
+    );
   } finally {
     endRequest(conversationId);
   }
 };
+
+const extractTextAndImagesFromContent = (content) => {
+  if (typeof content === "string") {
+    return { message: content, images: [] };
+  }
+  if (!Array.isArray(content)) {
+    return { message: "", images: [] };
+  }
+  const textPart = content.find((p) => p.type === "text");
+  const text = textPart?.text ?? "";
+  const images = content
+    .filter(
+      (p) =>
+        p.type === "image_url" && (p.imageUrl?.url || p.image_url?.url)
+    )
+    .map((p) => p.imageUrl?.url || p.image_url?.url);
+  return { message: text, images };
+};
+
+const retryLastMessage = () => {
+  const messages = messageCacheById.get(currentConversationId) || [];
+  const lastAssistant = messages[messages.length - 1];
+  if (!lastAssistant?.retryable) {
+    return;
+  }
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  const { message: messageToRetry, images: imagesToRetry } =
+    extractTextAndImagesFromContent(lastUser?.content);
+  if (!messageToRetry && !(imagesToRetry && imagesToRetry.length)) {
+    return;
+  }
+  const withoutErrorAndUser = messages.slice(0, -2);
+  messageCacheById.set(currentConversationId, withoutErrorAndUser);
+  pendingMessagesById.delete(currentConversationId);
+  updateHistory(withoutErrorAndUser);
+  sendMessage({ message: messageToRetry || "", images: imagesToRetry || [] });
+};
+
+history.addEventListener("click", (event) => {
+  const retryBtn = event.target.closest(".retry-send-btn");
+  if (retryBtn) {
+    event.preventDefault();
+    retryLastMessage();
+    return;
+  }
+});
 
 chatList.addEventListener("click", (event) => {
   const target = event.target.closest("li[data-id]");
@@ -344,6 +600,35 @@ chatList.addEventListener("click", (event) => {
   loadConversation(id);
 });
 
+if (modelSelect) {
+  modelSelect.addEventListener("change", () => {
+    saveSelectedModel(modelSelect.value);
+    updateImageUploadVisibility();
+  });
+}
+
+if (imageInput) {
+  imageInput.addEventListener("change", () => {
+    selectedImageFiles = Array.from(imageInput.files || []);
+    renderImagePreviews();
+  });
+}
+
+if (imagePreviews) {
+  imagePreviews.addEventListener("click", (event) => {
+    const removeBtn = event.target.closest(".image-preview-remove");
+    if (!removeBtn) {
+      return;
+    }
+    const index = parseInt(removeBtn.dataset.index, 10);
+    if (Number.isNaN(index) || index < 0 || index >= selectedImageFiles.length) {
+      return;
+    }
+    selectedImageFiles = selectedImageFiles.filter((_, i) => i !== index);
+    renderImagePreviews();
+  });
+}
+
 newChatButton.addEventListener("click", () => {
   currentConversationId = null;
   setActiveConversation(null);
@@ -351,8 +636,29 @@ newChatButton.addEventListener("click", () => {
   systemInput.disabled = false;
   systemInput.value = "";
   messageInput.value = "";
+  clearImageSelection();
   updateSendButton();
 });
+
+const uploadImagesAndGetUrls = async (files) => {
+  if (!files || files.length === 0) {
+    return [];
+  }
+  const dataUrls = await readFilesAsDataUrls(files);
+  if (dataUrls.length === 0) {
+    return [];
+  }
+  const response = await fetch("/api/upload-images", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ images: dataUrls })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || "Ошибка загрузки изображений");
+  }
+  return data?.urls || [];
+};
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -360,13 +666,28 @@ form.addEventListener("submit", async (event) => {
   const message = messageInput.value.trim();
   const system = systemInput.value.trim();
 
-  if (!message) {
-    updateHistory([{ role: "assistant", content: "Введите сообщение." }]);
+  if (!message && (!selectedImageFiles || selectedImageFiles.length === 0)) {
+    updateHistory([{ role: "assistant", content: "Введите сообщение или приложите изображение." }]);
     return;
   }
 
   messageInput.value = "";
-  await sendMessage({ message, system });
+  let imageUrls = [];
+  if (selectedImageFiles.length > 0) {
+    try {
+      imageUrls = await uploadImagesAndGetUrls(selectedImageFiles);
+    } catch (err) {
+      updateHistory([
+        {
+          role: "assistant",
+          content: err?.message || "Не удалось загрузить изображения."
+        }
+      ]);
+      return;
+    }
+  }
+  clearImageSelection();
+  await sendMessage({ message, system, images: imageUrls });
 });
 
 messageInput.addEventListener("keydown", (event) => {
@@ -386,6 +707,8 @@ messageInput.addEventListener("keydown", (event) => {
 
 const initApp = async () => {
   configureMarkdown();
+  await loadModels();
+  updateImageUploadVisibility();
   await loadConversations();
   const sessionState = getSessionState();
   if (sessionState.activeId) {

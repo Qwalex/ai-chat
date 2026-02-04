@@ -29,6 +29,10 @@
         <aside class="sidebar">
           <button id="new-chat" type="button">Новый диалог</button>
           <div class="field">
+            Модель
+            <select id="model" aria-label="Выбор модели"></select>
+          </div>
+          <div class="field">
             System <br> (для нового диалога, необязательно)
             <textarea id="system" rows="2" placeholder="Контекст или роль ассистента"></textarea>
           </div>
@@ -43,6 +47,13 @@
               Сообщение
               <textarea id="message" rows="3" placeholder="Напишите запрос"></textarea>
             </label>
+            <div id="image-upload-wrap" class="image-upload-wrap hidden">
+              <label class="field image-upload-label">
+                Изображения (для Gemini 3 Pro Image)
+                <input type="file" id="image-input" accept="image/*" multiple />
+              </label>
+              <div id="image-previews" class="image-previews"></div>
+            </div>
             <button id="send" type="submit">Отправить</button>
           </form>
         </section>
@@ -81,7 +92,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css"
     />
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/build/highlight.min.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>
