@@ -24,8 +24,8 @@ try {
 const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "moonshotai/kimi-k2.5";
 
 const ALLOWED_MODELS = [
-  { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5" },
-  { id: "deepseek/deepseek-v3.2", label: "DeepSeek V3.2" },
+  { id: "moonshotai/kimi-k2.5:nitro", label: "Kimi K2.5" },
+  { id: "deepseek/deepseek-v3.2:nitro", label: "DeepSeek V3.2" },
   // { id: "google/gemini-3-pro-image-preview", label: "Gemini 3 Pro Image" }
 ];
 const ALLOWED_MODEL_IDS = ALLOWED_MODELS.map((m) => m.id);
@@ -341,6 +341,18 @@ app.get("/api/conversations/:id", (req, res) => {
   return res.json({ conversation });
 });
 
+const sendSSE = (res, event, data) => {
+  const payload =
+    typeof data === "string" ? data : JSON.stringify(data);
+  res.write(`event: ${event}\ndata: ${payload}\n\n`);
+};
+
+/** Ошибки при вызове OpenRouter API — в ответ добавляем source: "openrouter" */
+const openRouterErrorJson = (message) => ({
+  error: message,
+  source: "openrouter"
+});
+
 app.post("/api/conversations/:id/messages", async (req, res) => {
   const conversation = conversations.get(req.params.id);
   if (!conversation) {
@@ -364,55 +376,103 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
   const messages = buildMessagesPayload(conversation, userMessageContent, model);
   const isFirstUserMessage = !hasUserMessages(conversation);
 
+  conversation.messages.push({ role: "user", content: userMessageContent });
+
+  let stream;
   try {
-    const result = await client.chat.send({
+    stream = await client.chat.send({
       model,
       messages,
-      stream: false
-    });
-
-    const rawContent = result?.choices?.[0]?.message?.content;
-    const text = normalizeMessageContent(rawContent) ?? "";
-    const usage = result?.usage ?? null;
-    const costUsd =
-      typeof result?.usage?.cost === "number"
-        ? result.usage.cost
-        : extractCostUsd({ usage: result?.usage });
-    const rate = await getUsdToRubRate();
-    const { costRub, costRubFinal } = calculateRub(
-      costUsd,
-      rate,
-      COMMISSION_MULTIPLIER
-    );
-    conversation.messages.push({ role: "user", content: userMessageContent });
-    conversation.messages.push({
-      role: "assistant",
-      content: text,
-      meta: { costUsd, costRub, costRubFinal, rate, usage }
-    });
-    conversation.updatedAt = new Date().toISOString();
-
-    if (isFirstUserMessage && conversation.title === "Новый диалог") {
-      const titleSource = messageText.trim() || "Изображение";
-      const generatedTitle = await generateTitle({ model, message: titleSource });
-      conversation.title = generatedTitle || titleFallbackFromMessage(titleSource);
-      conversation.updatedAt = new Date().toISOString();
-    }
-
-    return res.json({
-      text,
-      conversation,
-      costUsd,
-      costRub,
-      costRubFinal,
-      rate,
-      usage,
-      raw: result
+      stream: true,
+      provider: {
+        sort: 'latency'
+      }
     });
   } catch (error) {
-    const message = error?.message || "Request failed";
-    return res.status(500).json({ error: message });
+    conversation.messages.pop();
+    const errMessage = error?.message || "Request failed";
+    return res.status(500).json(openRouterErrorJson(errMessage));
   }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  let fullContent = "";
+  let lastUsage = null;
+  let streamError = null;
+
+  try {
+    for await (const chunk of stream) {
+      if (chunk?.done) {
+        break;
+      }
+      if (chunk?.error) {
+        streamError = chunk.error;
+        sendSSE(res, "error", openRouterErrorJson(
+          chunk.error?.message ?? "Stream error"
+        ));
+        break;
+      }
+      const delta = chunk?.choices?.[0]?.delta?.content;
+      if (typeof delta === "string") {
+        fullContent += delta;
+        sendSSE(res, "delta", { delta });
+      }
+      if (chunk?.usage) {
+        lastUsage = chunk.usage;
+      }
+    }
+  } catch (err) {
+    streamError = err;
+    sendSSE(res, "error", openRouterErrorJson(
+      err?.message ?? "Stream failed"
+    ));
+  }
+
+  if (streamError) {
+    conversation.messages.pop();
+    res.end();
+    return;
+  }
+
+  const text = normalizeMessageContent(fullContent) ?? "";
+  const costUsd =
+    typeof lastUsage?.cost === "number"
+      ? lastUsage.cost
+      : extractCostUsd({ usage: lastUsage });
+  const rate = await getUsdToRubRate();
+  const { costRub, costRubFinal } = calculateRub(
+    costUsd,
+    rate,
+    COMMISSION_MULTIPLIER
+  );
+  conversation.messages.push({
+    role: "assistant",
+    content: text,
+    meta: { costUsd, costRub, costRubFinal, rate, usage: lastUsage }
+  });
+  conversation.updatedAt = new Date().toISOString();
+
+  if (isFirstUserMessage && conversation.title === "Новый диалог") {
+    const titleSource = messageText.trim() || "Изображение";
+    const generatedTitle = await generateTitle({ model, message: titleSource });
+    conversation.title = generatedTitle || titleFallbackFromMessage(titleSource);
+    conversation.updatedAt = new Date().toISOString();
+  }
+
+  sendSSE(res, "done", {
+    conversation,
+    text,
+    usage: lastUsage,
+    costUsd,
+    costRub,
+    costRubFinal,
+    rate
+  });
+  res.end();
 });
 
 app.post("/api/chat", async (req, res) => {
@@ -467,7 +527,7 @@ app.post("/api/chat", async (req, res) => {
     });
   } catch (error) {
     const errMessage = error?.message || "Request failed";
-    return res.status(500).json({ error: errMessage });
+    return res.status(500).json(openRouterErrorJson(errMessage));
   }
 });
 

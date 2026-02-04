@@ -15,6 +15,7 @@ const IMAGE_MODEL_ID = "google/gemini-3-pro-image-preview";
 let currentConversationId = null;
 let selectedImageFiles = [];
 let lastMessages = [];
+let streamingAssistantContent = null;
 const pendingById = new Set();
 const messageCacheById = new Map();
 const pendingMessagesById = new Map();
@@ -226,8 +227,9 @@ const startRequest = (conversationId) => {
     return;
   }
   pendingById.add(conversationId);
+  streamingAssistantContent = "";
   updateSendButton();
-  renderHistory(lastMessages);
+  renderHistory(lastMessages, streamingAssistantContent);
 };
 
 const endRequest = (conversationId) => {
@@ -235,6 +237,7 @@ const endRequest = (conversationId) => {
     return;
   }
   pendingById.delete(conversationId);
+  streamingAssistantContent = null;
   updateSendButton();
   renderHistory(lastMessages);
 };
@@ -263,8 +266,13 @@ const renderUserContent = (content) => {
   return parts.join("");
 };
 
-const renderHistory = (messages = []) => {
+const renderHistory = (messages = [], streamingContent = null) => {
+  const wasAtBottom = isHistoryScrolledToBottom();
   const isTyping = currentConversationId && pendingById.has(currentConversationId);
+  const showStreamingBubble =
+    isTyping &&
+    typeof streamingContent === "string" &&
+    streamingContent.length > 0;
 
   if (!messages.length && !isTyping) {
     history.innerHTML = `<div class="empty">Сообщений пока нет.</div>`;
@@ -296,17 +304,42 @@ const renderHistory = (messages = []) => {
     })
     .join("");
 
-  const typingHtml = isTyping
-    ? `<div class="bubble assistant typing">
+  let typingHtml = "";
+  if (isTyping) {
+    if (showStreamingBubble) {
+      typingHtml = `<div class="bubble assistant streaming">
+        <span class="role">Ассистент:</span>
+        <div class="markdown">${renderMarkdown(streamingContent)}</div>
+      </div>`;
+    } else {
+      typingHtml = `<div class="bubble assistant typing">
         <span class="role">Ассистент:</span>
         <div class="typing-indicator">
           <span></span><span></span><span></span>
         </div>
-      </div>`
-    : "";
+      </div>`;
+    }
+  }
 
   history.innerHTML = `${itemsHtml}${typingHtml}`;
   applyHighlighting();
+  scrollHistoryToBottom(wasAtBottom);
+};
+
+const SCROLL_AT_BOTTOM_THRESHOLD = 10;
+
+const isHistoryScrolledToBottom = () => {
+  if (!history) return false;
+  const { scrollTop, scrollHeight, clientHeight } = history;
+  return scrollTop + clientHeight >= scrollHeight - SCROLL_AT_BOTTOM_THRESHOLD;
+};
+
+const scrollHistoryToBottom = (wasAtBottom = true) => {
+  if (!history) return;
+  requestAnimationFrame(() => {
+    if (!wasAtBottom) return;
+    history.scrollTop = history.scrollHeight;
+  });
 };
 
 const updateHistory = (messages, conversationId = currentConversationId) => {
@@ -480,23 +513,147 @@ const sendMessage = async ({ message, system, images: imageUrls = [] }) => {
           }
         );
         lastResponse = response;
-        lastData = await response.json().catch(() => ({}));
 
-        if (response.ok) {
+        if (!response.ok) {
+          lastData = await response.json().catch(() => ({}));
+          lastError =
+            lastData?.source === "openrouter"
+              ? `Ошибка запроса к OpenRouter: ${lastData?.error || "Ошибка запроса."}`
+              : lastData?.error || "Ошибка запроса.";
+          if (attempt < MAX_SEND_RETRIES) {
+            await sleep(RETRY_DELAY_MS);
+          }
+          continue;
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("text/event-stream")) {
+          lastData = await response.json().catch(() => ({}));
           pendingMessagesById.delete(conversationId);
-          updateHistory(lastData.conversation.messages, conversationId);
+          updateHistory(lastData.conversation?.messages ?? [], conversationId);
           await loadConversations();
           messageInput.value = "";
           systemInput.disabled = true;
           clearImageSelection();
+          endRequest(conversationId);
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          lastError = "Нет тела ответа.";
+          continue;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let currentEvent = null;
+        let currentData = [];
+
+        const findSSEBoundary = () => {
+          const nn = buffer.indexOf("\n\n");
+          const rnrn = buffer.indexOf("\r\n\r\n");
+          if (nn >= 0 && (rnrn < 0 || nn <= rnrn)) return { idx: nn, len: 2 };
+          if (rnrn >= 0) return { idx: rnrn, len: 4 };
+          return null;
+        };
+
+        const processBuffer = async () => {
+          let boundary;
+          while ((boundary = findSSEBoundary()) !== null) {
+            const block = buffer.slice(0, boundary.idx);
+            buffer = buffer.slice(boundary.idx + boundary.len);
+            const lines = block.split(/\r\n|\n|\r/);
+            let ev = null;
+            const dataLines = [];
+            for (const line of lines) {
+              const t = line.trim();
+              if (t.toLowerCase().startsWith("event:")) {
+                ev = t.slice(6).trim();
+              } else if (t.toLowerCase().startsWith("data:")) {
+                dataLines.push(t.slice(5).replace(/^ /, ""));
+              }
+            }
+            if (dataLines.length === 0) continue;
+            if (!ev) {
+              try {
+                const data = JSON.parse(dataLines.join("\n"));
+                if (data.delta != null) ev = "delta";
+                else if (data.conversation != null) ev = "done";
+                else if (data.error != null) ev = "error";
+              } catch (_) {
+                continue;
+              }
+            }
+            const dataStr = dataLines.join("\n");
+            try {
+              const data = JSON.parse(dataStr);
+              if (ev === "delta") {
+                const delta = typeof data.delta === "string" ? data.delta : "";
+                if (delta) {
+                  streamingAssistantContent = (streamingAssistantContent ?? "") + delta;
+                  renderHistory(lastMessages, streamingAssistantContent);
+                }
+              }
+              if (ev === "done") {
+                pendingMessagesById.delete(conversationId);
+                const conv = data.conversation;
+                if (conv?.messages) {
+                  updateHistory(conv.messages, conversationId);
+                }
+                await loadConversations();
+                messageInput.value = "";
+                systemInput.disabled = true;
+                clearImageSelection();
+                endRequest(conversationId);
+                return true;
+              }
+              if (ev === "error") {
+                const errText =
+                  data?.source === "openrouter"
+                    ? `Ошибка запроса к OpenRouter: ${data?.error || "Ошибка стрима."}`
+                    : data?.error || "Ошибка стрима.";
+                const cached = messageCacheById.get(conversationId) || [];
+                updateHistory(
+                  [...cached, { role: "assistant", content: errText, retryable: true }],
+                  conversationId
+                );
+                endRequest(conversationId);
+                return true;
+              }
+            } catch (_) {
+              // ignore parse errors
+            }
+          }
+          return false;
+        };
+
+        let streamDone = false;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              if (buffer.length > 0 && (await processBuffer())) {
+                streamDone = true;
+              }
+              break;
+            }
+            buffer += decoder.decode(value, { stream: true });
+            if (await processBuffer()) {
+              streamDone = true;
+              break;
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        if (streamDone) {
           updateSendButton();
           return;
         }
 
-        lastError = lastData?.error || "Ошибка запроса.";
-        if (attempt < MAX_SEND_RETRIES) {
-          await sleep(RETRY_DELAY_MS);
-        }
+        lastError = "Стрим завершился без события done.";
       } catch (err) {
         lastError = "Ошибка соединения с сервером.";
         if (attempt < MAX_SEND_RETRIES) {
