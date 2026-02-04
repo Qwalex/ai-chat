@@ -712,6 +712,7 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
     content: text,
     meta: { costUsd, costRub, costRubFinal, rate, usage: lastUsage }
   });
+  console.log({ costUsd, costRub, costRubFinal, rate, usage: lastUsage })
   conversation.updatedAt = new Date().toISOString();
 
   if (isFirstUserMessage && conversation.title === "Новый диалог") {
