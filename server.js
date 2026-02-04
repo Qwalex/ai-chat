@@ -43,6 +43,41 @@ const ALLOWED_MODELS = [
 ];
 const ALLOWED_MODEL_IDS = ALLOWED_MODELS.map((m) => m.id);
 
+/** slug для URL страницы модели: moonshotai/kimi-k2.5:nitro → kimi-k2-5 */
+const slugFromModelId = (id) =>
+  id
+    .split("/")
+    .pop()
+    .split(":")[0]
+    .replace(/\./g, "-");
+
+/** SEO-контент для страницы одной модели */
+const buildModelPageSeo = (label) => ({
+  title: `${label} — ИИ онлайн бесплатно, AI онлайн | Чат с ИИ`,
+  description: `${label} — ИИ онлайн бесплатно, AI бесплатно. Чат с нейросетью ${label}. Ответы с подсветкой кода, история диалогов, быстрый старт без регистрации.`,
+  h2: `${label} — ИИ онлайн бесплатно, ответы и идеи от нейросети`,
+  paragraphs: [
+    `${label} — ИИ онлайн бесплатно: модель для общения в одном окне. AI онлайн без регистрации: формулируйте вопросы, уточняйте детали и получайте структурированные ответы. Подходит для учёбы, работы, кода и генерации идей.`,
+    "ИИ бесплатно онлайн: интерфейс поддерживает историю диалогов, системный промпт и контекст — для студентов, разработчиков и менеджеров.",
+    "AI бесплатно: уточняйте термины, проверяйте гипотезы, составляйте планы и получайте краткие резюме. Ответы отображаются с подсветкой кода и форматированием.",
+    `Используйте ИИ онлайн с ${label} для повседневных задач: от переписки до разбора сложных тем. AI онлайн бесплатно помогает экономить время и быстрее находить нужную информацию.`
+  ],
+  listItems: [
+    `${label} — ИИ онлайн бесплатно, чат на русском языке`,
+    "AI онлайн, AI бесплатно — структурированные ответы и краткие выводы",
+    "ИИ бесплатно — быстрый старт без регистрации",
+    "подходит для учёбы, работы и творчества"
+  ]
+});
+
+const MODEL_PAGES = ALLOWED_MODELS.map((m) => ({
+  id: m.id,
+  label: m.label,
+  slug: slugFromModelId(m.id),
+  seo: buildModelPageSeo(m.label)
+}));
+const MODEL_PAGE_BY_SLUG = new Map(MODEL_PAGES.map((p) => [p.slug, p]));
+
 const getModel = (modelFromRequest) => {
   if (modelFromRequest && ALLOWED_MODEL_IDS.includes(modelFromRequest)) {
     return modelFromRequest;
@@ -319,6 +354,56 @@ const generateTitle = async ({ model, message }) => {
 };
 
 app.use(express.json({ limit: "20mb" }));
+
+const INDEX_HTML_PATH = path.join(__dirname, "public", "index.html");
+
+app.get("/model/:slug", (req, res) => {
+  const page = MODEL_PAGE_BY_SLUG.get(req.params.slug);
+  if (!page) {
+    return res.redirect(302, "/");
+  }
+  let html;
+  try {
+    html = fs.readFileSync(INDEX_HTML_PATH, "utf8");
+  } catch (err) {
+    return res.status(500).send("Index not found");
+  }
+  const { label, id, seo } = page;
+  const titleTag = `<title>${seo.title}</title>`;
+  const metaDesc = `<meta name="description" content="${seo.description.replace(/"/g, "&quot;")}" />`;
+  html = html.replace(
+    /<title>[\s\S]*?<\/title>/,
+    titleTag
+  );
+  if (!html.includes('name="description"')) {
+    html = html.replace("</head>", `    ${metaDesc}\n  </head>`);
+  } else {
+    html = html.replace(/<meta name="description" content="[^"]*" \/>/, metaDesc);
+  }
+  html = html.replace(
+    /<h1>[\s\S]*?<\/h1>/,
+    `<h1>${label} — ИИ онлайн бесплатно, AI онлайн</h1>`
+  );
+  const seoSectionHtml = `    <section class="seo">
+      <h2>${seo.h2}</h2>
+      ${seo.paragraphs.map((p) => `      <p>\n        ${p}\n      </p>`).join("\n")}
+      <ul>
+        ${seo.listItems.map((li) => `        <li>${li}</li>`).join("\n")}
+      </ul>
+    </section>`;
+  html = html.replace(
+    /<section class="seo">[\s\S]*?<\/section>/,
+    seoSectionHtml
+  );
+  const defaultModelScript = `<script>window.__DEFAULT_MODEL_ID__ = ${JSON.stringify(id)};</script>\n    `;
+  html = html.replace(
+    /<script src="\/app\.js" defer><\/script>/,
+    defaultModelScript + '<script src="/app.js" defer></script>'
+  );
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 const mimeToExt = {

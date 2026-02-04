@@ -412,11 +412,16 @@ const loadModels = async () => {
         `<option value="${escapeHtml(m.id)}">${escapeHtml(m.label || m.id)}</option>`
     )
     .join("");
-  const saved = loadSelectedModel();
+  const defaultFromPage =
+    typeof window.__DEFAULT_MODEL_ID__ === "string"
+      ? window.__DEFAULT_MODEL_ID__
+      : null;
+  const saved = defaultFromPage || loadSelectedModel();
   if (saved) {
     const found = models.some((m) => m.id === saved);
     if (found) {
       modelSelect.value = saved;
+      saveSelectedModel(saved);
     }
   }
   if (modelSelect.options.length > 0 && !modelSelect.value) {
