@@ -26,7 +26,7 @@ const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "moonshotai/kimi-k2.5";
 const ALLOWED_MODELS = [
   { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5" },
   { id: "deepseek/deepseek-v3.2", label: "DeepSeek V3.2" },
-  { id: "google/gemini-3-pro-image-preview", label: "Gemini 3 Pro Image" }
+  // { id: "google/gemini-3-pro-image-preview", label: "Gemini 3 Pro Image" }
 ];
 const ALLOWED_MODEL_IDS = ALLOWED_MODELS.map((m) => m.id);
 
