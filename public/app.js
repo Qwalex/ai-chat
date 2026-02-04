@@ -16,6 +16,9 @@ let currentConversationId = null;
 let selectedImageFiles = [];
 let lastMessages = [];
 let streamingAssistantContent = null;
+/** DOM-элемент .markdown пузыря стриминга — обновляем только его при delta */
+let streamingBubbleContentEl = null;
+let streamingUpdateScheduled = false;
 const pendingById = new Set();
 const messageCacheById = new Map();
 const pendingMessagesById = new Map();
@@ -206,11 +209,11 @@ const formatCost = (value, currency) => {
   return `$${value.toFixed(6)}`;
 };
 
-const applyHighlighting = () => {
-  if (!window.hljs || !history) {
-    return;
-  }
-  const blocks = history.querySelectorAll("pre code");
+const applyHighlighting = (container = null) => {
+  if (!window.hljs) return;
+  const root = container ?? history;
+  if (!root) return;
+  const blocks = root.querySelectorAll("pre code");
   blocks.forEach((block) => {
     window.hljs.highlightElement(block);
   });
@@ -228,6 +231,8 @@ const startRequest = (conversationId) => {
   }
   pendingById.add(conversationId);
   streamingAssistantContent = "";
+  streamingBubbleContentEl = null;
+  streamingUpdateScheduled = false;
   updateSendButton();
   renderHistory(lastMessages, streamingAssistantContent);
 };
@@ -238,6 +243,8 @@ const endRequest = (conversationId) => {
   }
   pendingById.delete(conversationId);
   streamingAssistantContent = null;
+  streamingBubbleContentEl = null;
+  streamingUpdateScheduled = false;
   updateSendButton();
   renderHistory(lastMessages);
 };
@@ -324,6 +331,25 @@ const renderHistory = (messages = [], streamingContent = null) => {
   history.innerHTML = `${itemsHtml}${typingHtml}`;
   applyHighlighting();
   scrollHistoryToBottom(wasAtBottom);
+  if (showStreamingBubble) {
+    streamingBubbleContentEl = history.querySelector(".bubble.assistant.streaming .markdown");
+  } else {
+    streamingBubbleContentEl = null;
+  }
+};
+
+/** Обновляет только контент пузыря стриминга (троттлинг через rAF), без полного перерендера */
+const scheduleStreamingBubbleUpdate = () => {
+  if (!streamingBubbleContentEl || streamingUpdateScheduled) return;
+  streamingUpdateScheduled = true;
+  requestAnimationFrame(() => {
+    streamingUpdateScheduled = false;
+    if (!streamingBubbleContentEl || streamingAssistantContent == null) return;
+    const wasAtBottom = isHistoryScrolledToBottom();
+    streamingBubbleContentEl.innerHTML = renderMarkdown(streamingAssistantContent);
+    applyHighlighting(streamingBubbleContentEl);
+    scrollHistoryToBottom(wasAtBottom);
+  });
 };
 
 const SCROLL_AT_BOTTOM_THRESHOLD = 10;
@@ -592,7 +618,11 @@ const sendMessage = async ({ message, system, images: imageUrls = [] }) => {
                 const delta = typeof data.delta === "string" ? data.delta : "";
                 if (delta) {
                   streamingAssistantContent = (streamingAssistantContent ?? "") + delta;
-                  renderHistory(lastMessages, streamingAssistantContent);
+                  if (streamingBubbleContentEl) {
+                    scheduleStreamingBubbleUpdate();
+                  } else {
+                    renderHistory(lastMessages, streamingAssistantContent);
+                  }
                 }
               }
               if (ev === "done") {
