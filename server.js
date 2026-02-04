@@ -26,7 +26,20 @@ const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || "moonshotai/kimi-k2.5";
 const ALLOWED_MODELS = [
   { id: "moonshotai/kimi-k2.5:nitro", label: "Kimi K2.5" },
   { id: "deepseek/deepseek-v3.2:nitro", label: "DeepSeek V3.2" },
-  // { id: "google/gemini-3-pro-image-preview", label: "Gemini 3 Pro Image" }
+  { id: "qwen/qwen3-coder-next:nitro", label: "Qwen3 Coder Next" },
+  { id: "deepseek/deepseek-v3.2-speciale:nitro", label: "DeepSeek V3.2 Speciale" },
+  { id: "stepfun/step-3.5-flash:free", label: "Step 3.5 Flash" },
+  { id: "arcee-ai/trinity-large-preview:free", label: "Trinity Large Preview" },
+  { id: "minimax/minimax-m2-her:nitro", label: "MiniMax M2-her" },
+  { id: "writer/palmyra-x5:nitro", label: "Palmyra X5" },
+  { id: "openai/gpt-5.2-codex:nitro", label: "GPT-5.2-Codex" },
+  { id: "z-ai/glm-4.7:nitro", label: "GLM 4.7" },
+  { id: "mistralai/mistral-small-creative:nitro", label: "Mistral Small Creative" },
+  { id: "xiaomi/mimo-v2-flash:nitro", label: "MiMo-V2-Flash" },
+  { id: "nvidia/nemotron-3-nano-30b-a3b:nitro", label: "Nemotron 3 Nano 30B A3B" },
+  { id: "openai/gpt-5.2-chat:nitro", label: "GPT-5.2 Chat" },
+  // { id: "openai/gpt-5.2-pro:nitro", label: "GPT-5.2 Pro" },
+  { id: "amazon/nova-2-lite-v1:nitro", label: "Nova 2 Lite" },
 ];
 const ALLOWED_MODEL_IDS = ALLOWED_MODELS.map((m) => m.id);
 
@@ -71,8 +84,38 @@ const COMMISSION_MULTIPLIER = Number(process.env.COMMISSION_MULTIPLIER) || 1.5;
 const SYSTEM_PROMPTS_BY_MODEL = {
   "moonshotai/kimi-k2.5":
     "Ты — Kimi K2.5. На вопросы о версии или имени всегда отвечай: Kimi K2.5. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
-  "deepseek/deepseek-v3.2":
+  "moonshotai/kimi-k2.5:nitro":
+    "Ты — Kimi K2.5. На вопросы о версии или имени всегда отвечай: Kimi K2.5. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "deepseek/deepseek-v3.2:nitro":
     "Ты — DeepSeek V3.2. На вопросы о версии или имени всегда отвечай: DeepSeek V3.2. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "qwen/qwen3-coder-next:nitro":
+    "Ты — Qwen3 Coder Next. На вопросы о версии или имени всегда отвечай: Qwen3 Coder Next. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "deepseek/deepseek-v3.2-speciale:nitro":
+    "Ты — DeepSeek V3.2 Speciale. На вопросы о версии или имени всегда отвечай: DeepSeek V3.2 Speciale. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "stepfun/step-3.5-flash:free":
+    "Ты — Step 3.5 Flash (free). На вопросы о версии или имени всегда отвечай: Step 3.5 Flash. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "arcee-ai/trinity-large-preview:free":
+    "Ты — Trinity Large Preview (free). На вопросы о версии или имени всегда отвечай: Trinity Large Preview. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "minimax/minimax-m2-her:nitro":
+    "Ты — MiniMax M2-her. На вопросы о версии или имени всегда отвечай: MiniMax M2-her. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "writer/palmyra-x5:nitro":
+    "Ты — Palmyra X5. На вопросы о версии или имени всегда отвечай: Palmyra X5. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "openai/gpt-5.2-codex:nitro":
+    "Ты — GPT-5.2-Codex. На вопросы о версии или имени всегда отвечай: GPT-5.2-Codex. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "z-ai/glm-4.7:nitro":
+    "Ты — GLM 4.7. На вопросы о версии или имени всегда отвечай: GLM 4.7. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "mistralai/mistral-small-creative:nitro":
+    "Ты — Mistral Small Creative. На вопросы о версии или имени всегда отвечай: Mistral Small Creative. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "xiaomi/mimo-v2-flash:nitro":
+    "Ты — MiMo-V2-Flash. На вопросы о версии или имени всегда отвечай: MiMo-V2-Flash. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "nvidia/nemotron-3-nano-30b-a3b:nitro":
+    "Ты — Nemotron 3 Nano 30B A3B. На вопросы о версии или имени всегда отвечай: Nemotron 3 Nano 30B A3B. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "openai/gpt-5.2-chat:nitro":
+    "Ты — GPT-5.2 Chat. На вопросы о версии или имени всегда отвечай: GPT-5.2 Chat. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "openai/gpt-5.2-pro:nitro":
+    "Ты — GPT-5.2 Pro. На вопросы о версии или имени всегда отвечай: GPT-5.2 Pro. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
+  "amazon/nova-2-lite-v1:nitro":
+    "Ты — Nova 2 Lite. На вопросы о версии или имени всегда отвечай: Nova 2 Lite. Если в сообщении есть код на разных языках, разделяй его на разные блоки с указанием языка: ```html```, ```css```, ```json``` и т.д.",
   "google/gemini-3-pro-image-preview":
     "Ты — Gemini 3 Pro Image. Модель для анализа и генерации изображений. На вопросы о версии или имени отвечай: Gemini 3 Pro Image. Поддерживаешь ввод и вывод изображений, описание картинок и генерацию по текстовому запросу."
 };
@@ -80,7 +123,7 @@ const SYSTEM_PROMPTS_BY_MODEL = {
 const getSystemPromptForModel = (modelId) => {
   return (
     SYSTEM_PROMPTS_BY_MODEL[modelId] ||
-    SYSTEM_PROMPTS_BY_MODEL["moonshotai/kimi-k2.5"]
+    SYSTEM_PROMPTS_BY_MODEL["moonshotai/kimi-k2.5:nitro"]
   );
 };
 
@@ -378,20 +421,48 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
 
   conversation.messages.push({ role: "user", content: userMessageContent });
 
-  let stream;
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  const openRouterHeaders = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`
+  };
+  if (process.env.OPENROUTER_HTTP_REFERER) {
+    openRouterHeaders["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER;
+  }
+  if (process.env.OPENROUTER_X_TITLE) {
+    openRouterHeaders["X-Title"] = process.env.OPENROUTER_X_TITLE;
+  }
+
+  let openRouterRes;
   try {
-    stream = await client.chat.send({
-      model,
-      messages,
-      stream: true,
-      provider: {
-        sort: 'latency'
-      }
+    openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: openRouterHeaders,
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: true,
+        provider: { sort: "latency" },
+        reasoning: { enabled: true }
+      })
     });
   } catch (error) {
     conversation.messages.pop();
     const errMessage = error?.message || "Request failed";
     return res.status(500).json(openRouterErrorJson(errMessage));
+  }
+
+  if (!openRouterRes.ok) {
+    conversation.messages.pop();
+    const errBody = await openRouterRes.text();
+    let errMessage = "Request failed";
+    try {
+      const errJson = JSON.parse(errBody);
+      errMessage = errJson?.error?.message ?? errMessage;
+    } catch (_) {
+      // ignore
+    }
+    return res.status(openRouterRes.status).json(openRouterErrorJson(errMessage));
   }
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -401,29 +472,57 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
   res.flushHeaders?.();
 
   let fullContent = "";
-  let lastUsage = null;
+  /** Последний чанк из API — целиком, с полным usage (cost_details, prompt_tokens_details и т.д.) */
+  let lastChunk = null;
   let streamError = null;
 
   try {
-    for await (const chunk of stream) {
-      if (chunk?.done) {
-        break;
+    const reader = openRouterRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const lines = block.split(/\r\n|\n|\r/);
+        const dataParts = [];
+        for (const line of lines) {
+          if (line.startsWith("data:")) {
+            dataParts.push(line.slice(5).replace(/^\s/, ""));
+          }
+        }
+        const dataStr = dataParts.join("\n").trim();
+        if (!dataStr) continue;
+        if (dataStr === "[DONE]") break;
+        let chunk;
+        try {
+          chunk = JSON.parse(dataStr);
+        } catch (_) {
+          continue;
+        }
+        if (chunk?.error) {
+          streamError = chunk.error;
+          sendSSE(res, "error", openRouterErrorJson(
+            chunk.error?.message ?? "Stream error"
+          ));
+          break;
+        }
+        const delta = chunk?.choices?.[0]?.delta?.content;
+        if (typeof delta === "string") {
+          fullContent += delta;
+          sendSSE(res, "delta", { delta });
+        }
+        if (chunk?.usage) {
+          lastChunk = chunk;
+        }
       }
-      if (chunk?.error) {
-        streamError = chunk.error;
-        sendSSE(res, "error", openRouterErrorJson(
-          chunk.error?.message ?? "Stream error"
-        ));
-        break;
-      }
-      const delta = chunk?.choices?.[0]?.delta?.content;
-      if (typeof delta === "string") {
-        fullContent += delta;
-        sendSSE(res, "delta", { delta });
-      }
-      if (chunk?.usage) {
-        lastUsage = chunk.usage;
-      }
+      if (streamError) break;
     }
   } catch (err) {
     streamError = err;
@@ -437,6 +536,8 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
     res.end();
     return;
   }
+
+  const lastUsage = lastChunk?.usage ?? null;
 
   const text = normalizeMessageContent(fullContent) ?? "";
   const costUsd =
