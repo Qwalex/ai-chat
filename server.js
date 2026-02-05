@@ -5,6 +5,7 @@ import fs from "fs";
 import crypto from "crypto";
 import dotenv from "dotenv";
 import { OpenRouter } from "@openrouter/sdk";
+import { marked } from "marked";
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const UPLOADS_DIR = path.join(__dirname, "public", "uploads");
 const IMAGES_DIR = path.join(__dirname, "public", "images");
+const BLOG_DIR = path.join(__dirname, "blog");
 
 try {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -134,6 +136,63 @@ const buildModelLinksBlockHtml = () => {
   <h2>Модели в чате</h2>
   <p class="model-links-intro">Перейдите на страницу модели — там свой SEO-текст и модель выбрана по умолчанию.</p>
   <ul class="model-links-list">${items}</ul>
+</section>`;
+};
+
+/** Список статей блога из папки blog (файлы .md), slug = имя файла без расширения */
+const listBlogPosts = () => {
+  try {
+    const files = fs.readdirSync(BLOG_DIR) || [];
+    const posts = [];
+    for (const file of files) {
+      if (!file.endsWith(".md")) continue;
+      const slug = file.slice(0, -3);
+      const filePath = path.join(BLOG_DIR, file);
+      const raw = fs.readFileSync(filePath, "utf8");
+      const firstLine = (raw.split("\n")[0] || "").replace(/^\uFEFF/, "").trim();
+      const titleMatch = firstLine.match(/^#\s+(.+)$/);
+      const title = titleMatch ? titleMatch[1].trim() : (firstLine.startsWith("#") ? firstLine.replace(/^#\s*/, "").trim() || slug : slug);
+      posts.push({ slug, title });
+    }
+    return posts.sort((a, b) => a.slug.localeCompare(b.slug));
+  } catch (err) {
+    return [];
+  }
+};
+
+/** Контент одной статьи по slug */
+const getBlogPostBySlug = (slug) => {
+  const safeSlug = path.basename(slug, ".md").replace(/[^a-z0-9_-]/gi, "");
+  const filePath = path.join(BLOG_DIR, `${safeSlug}.md`);
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, "utf8");
+    const firstLine = (raw.split("\n")[0] || "").replace(/^\uFEFF/, "").trim();
+    const titleMatch = firstLine.match(/^#\s+(.+)$/);
+    const title = titleMatch ? titleMatch[1].trim() : (firstLine.startsWith("#") ? firstLine.replace(/^#\s*/, "").trim() || safeSlug : safeSlug);
+    const html = marked.parse(raw, { async: false });
+    return { title, html };
+  } catch (err) {
+    return null;
+  }
+};
+
+/** HTML блока «Блог» для главной (лента статей над блоком моделей) */
+const buildBlogBlockHtml = () => {
+  const posts = listBlogPosts();
+  if (posts.length === 0) return "";
+  const items = posts
+    .slice(0, 10)
+    .map(
+      (p) =>
+        `<li class="blog-feed-item"><a href="/blog/${escapeHtmlAttr(p.slug)}">${escapeHtmlAttr(p.title)}</a></li>`
+    )
+    .join("\n");
+  return `<section class="blog-feed" id="blog-feed">
+  <h2>Блог</h2>
+  <p class="blog-feed-intro">Статьи и заметки — обзоры и мысли про ИИ и не только.</p>
+  <ul class="blog-feed-list">${items}</ul>
+  <p class="blog-feed-more"><a href="/blog">Все статьи →</a></p>
 </section>`;
 };
 
@@ -416,6 +475,8 @@ app.use(express.json({ limit: "20mb" }));
 
 const INDEX_HTML_PATH = path.join(__dirname, "public", "index.html");
 const MODEL_LINKS_PLACEHOLDER = "{{MODEL_LINKS_BLOCK}}";
+const BLOG_BLOCK_PLACEHOLDER = "{{BLOG_BLOCK}}";
+const BLOG_PAGE_PATH = path.join(__dirname, "public", "blog-page.html");
 
 app.get("/", (req, res) => {
   let html;
@@ -424,6 +485,7 @@ app.get("/", (req, res) => {
   } catch (err) {
     return res.status(500).send("Index not found");
   }
+  html = html.replace(BLOG_BLOCK_PLACEHOLDER, buildBlogBlockHtml());
   html = html.replace(MODEL_LINKS_PLACEHOLDER, buildModelLinksBlockHtml());
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
@@ -472,7 +534,46 @@ app.get("/model/:slug", (req, res) => {
     /<script src="\/app\.js" defer><\/script>/,
     defaultModelScript + '<script src="/app.js" defer></script>'
   );
+  html = html.replace(BLOG_BLOCK_PLACEHOLDER, buildBlogBlockHtml());
   html = html.replace(MODEL_LINKS_PLACEHOLDER, buildModelLinksBlockHtml());
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
+app.get("/blog", (req, res) => {
+  const posts = listBlogPosts();
+  let html;
+  try {
+    html = fs.readFileSync(BLOG_PAGE_PATH, "utf8");
+  } catch (err) {
+    return res.status(500).send("Blog not found");
+  }
+  const listItems = posts
+    .map(
+      (p) =>
+        `<li class="blog-list-item"><a href="/blog/${escapeHtmlAttr(p.slug)}">${escapeHtmlAttr(p.title)}</a></li>`
+    )
+    .join("\n");
+  const content = `<h1>Блог</h1><ul class="blog-list">${listItems}</ul>`;
+  html = html.replace("{{BLOG_TITLE}}", "Блог | Чат с ИИ");
+  html = html.replace("{{BLOG_CONTENT}}", content);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
+app.get("/blog/:slug", (req, res) => {
+  const post = getBlogPostBySlug(req.params.slug);
+  if (!post) {
+    return res.redirect(302, "/blog");
+  }
+  let html;
+  try {
+    html = fs.readFileSync(BLOG_PAGE_PATH, "utf8");
+  } catch (err) {
+    return res.status(500).send("Blog not found");
+  }
+  html = html.replace("{{BLOG_TITLE}}", `${escapeHtmlAttr(post.title)} | Блог | Чат с ИИ`);
+  html = html.replace("{{BLOG_CONTENT}}", `<article class="blog-article">${post.html}</article>`);
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
 });

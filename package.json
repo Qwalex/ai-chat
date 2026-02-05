@@ -9,6 +9,7 @@
   "dependencies": {
     "@openrouter/sdk": "^0.5.1",
     "dotenv": "^17.2.3",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "marked": "^15.0.4"
   }
 }
