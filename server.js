@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import crypto from "crypto";
 import dotenv from "dotenv";
+import { notify } from "./notify.js";
 import { OpenRouter } from "@openrouter/sdk";
 import { marked } from "marked";
 
@@ -864,6 +865,8 @@ app.post("/api/chat", async (req, res) => {
       messages,
       stream: false
     });
+
+    notify(`Use ${model} to generate response: ${message}`);
 
     const rawContent = result?.choices?.[0]?.message?.content;
     const text = normalizeMessageContent(rawContent) ?? "";
