@@ -813,6 +813,9 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
   console.log(`Use ${model} to generate response: ${messageText}`);
   console.log(`Cost: $${costUsd} → ${costRub}₽ → ${costRubFinal}₽ (rate: ${rate})`);
   console.log('---')
+  writeLog(`Use ${model} to generate response: ${messageText}`);
+  writeLog(`Cost: $${costUsd} → ${costRub}₽ → ${costRubFinal}₽ (rate: ${rate})`);
+  writeLog('---')
   conversation.updatedAt = new Date().toISOString();
 
   if (isFirstUserMessage && conversation.title === "Новый диалог") {
