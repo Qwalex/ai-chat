@@ -459,7 +459,7 @@ const generateTitle = async ({ model, message }) => {
 
   try {
     const result = await client.chat.send({
-      model,
+      model: 'arcee-ai/trinity-large-preview:free',
       messages: titleMessages,
       temperature: 0.2,
       stream: false
@@ -867,6 +867,7 @@ app.post("/api/chat", async (req, res) => {
     });
 
     notify(`Use ${model} to generate response: ${message}`);
+    console.log(`Use ${model} to generate response: ${message}`);
 
     const rawContent = result?.choices?.[0]?.message?.content;
     const text = normalizeMessageContent(rawContent) ?? "";
