@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import crypto from "crypto";
 import dotenv from "dotenv";
-import { notify } from "./notify.js";
+import { notify } from "./utils";
 import { OpenRouter } from "@openrouter/sdk";
 import { marked } from "marked";
 
