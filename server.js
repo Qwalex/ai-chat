@@ -4,7 +4,6 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import crypto from "crypto";
 import dotenv from "dotenv";
-import { notify } from "./utils/index.js";
 import { OpenRouter } from "@openrouter/sdk";
 import { marked } from "marked";
 
@@ -449,12 +448,7 @@ const generateTitle = async ({ model, message }) => {
   }
 
   const titleMessages = [
-    {
-      role: "system",
-      content:
-        "Сформулируй короткое название диалога (3-6 слов, до 40 символов). Одна строка. Без кавычек и точек. Пример: 'Код карусели', 'Задача на сжатие'"
-    },
-    { role: "user", content: message }
+    { role: "user", content: `Сформулируй короткое название диалога (3-6 слов, до 40 символов). Одна строка. Без кавычек и точек. По фразе: "${message}"` }
   ];
 
   try {
@@ -816,9 +810,9 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
     content: text,
     meta: { costUsd, costRub, costRubFinal, rate, usage: lastUsage }
   });
-  notify(`Use ${model} to generate response: ${messageText}`);
   console.log(`Use ${model} to generate response: ${messageText}`);
-  console.log({ costUsd, costRub, costRubFinal, rate, usage: lastUsage })
+  console.log(`Cost: $${costUsd} → ${costRub}₽ → ${costRubFinal}₽ (rate: ${rate})`);
+  console.log('---')
   conversation.updatedAt = new Date().toISOString();
 
   if (isFirstUserMessage && conversation.title === "Новый диалог") {
@@ -868,7 +862,6 @@ app.post("/api/chat", async (req, res) => {
       stream: false
     });
 
-    notify(`Use ${model} to generate response: ${message}`);
     console.log(`Use ${model} to generate response: ${message}`);
 
     const rawContent = result?.choices?.[0]?.message?.content;
