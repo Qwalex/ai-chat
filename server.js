@@ -6,6 +6,7 @@ import crypto from "crypto";
 import dotenv from "dotenv";
 import { OpenRouter } from "@openrouter/sdk";
 import { marked } from "marked";
+import { writeLog } from "./utils/writeLog.js";
 
 dotenv.config();
 
