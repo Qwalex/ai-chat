@@ -816,6 +816,8 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
     content: text,
     meta: { costUsd, costRub, costRubFinal, rate, usage: lastUsage }
   });
+  notify(`Use ${model} to generate response: ${messageText}`);
+  console.log(`Use ${model} to generate response: ${messageText}`);
   console.log({ costUsd, costRub, costRubFinal, rate, usage: lastUsage })
   conversation.updatedAt = new Date().toISOString();
 
