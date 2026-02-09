@@ -821,9 +821,12 @@ app.post("/api/conversations/:id/messages", async (req, res) => {
 
   if (isFirstUserMessage && conversation.title === "Новый диалог") {
     const titleSource = messageText.trim() || "Изображение";
-    const generatedTitle = await generateTitle({ model, message: titleSource });
-    conversation.title = generatedTitle || titleFallbackFromMessage(titleSource);
-    conversation.updatedAt = new Date().toISOString();
+    generateTitle({ model, message: titleSource })
+      .then((generatedTitle) => {
+        conversation.title = generatedTitle || titleFallbackFromMessage(titleSource);
+        conversation.updatedAt = new Date().toISOString();
+      })
+      .catch((err) => console.error("Title generation failed:", err));
   }
 
   sendSSE(res, "done", {
