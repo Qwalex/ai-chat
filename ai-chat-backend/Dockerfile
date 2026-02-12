@@ -1,6 +1,9 @@
-FROM node:24.13.1-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
+
+RUN apk add --no-cache python3 build-base
+ENV npm_config_python=/usr/bin/python3
 
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -9,7 +12,7 @@ COPY . .
 RUN npm run build
 RUN npm prune --production
 
-FROM node:24.13.1-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 

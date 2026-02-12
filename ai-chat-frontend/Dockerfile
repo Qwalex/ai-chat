@@ -1,4 +1,4 @@
-FROM node:24.13.1-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
 
 RUN npm run build
 
-FROM node:24.13.1-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 

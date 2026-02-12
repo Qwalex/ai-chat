@@ -1,20 +1,30 @@
 export const ALLOWED_MODELS = [
-  { id: 'moonshotai/kimi-k2.5:nitro', label: 'Kimi K2.5' },
-  { id: 'deepseek/deepseek-v3.2:nitro', label: 'DeepSeek V3.2' },
-  { id: 'qwen/qwen3-coder-next:nitro', label: 'Qwen3 Coder Next' },
-  { id: 'deepseek/deepseek-v3.2-speciale:nitro', label: 'DeepSeek V3.2 Speciale' },
-  { id: 'stepfun/step-3.5-flash:free', label: 'Step 3.5 Flash' },
-  { id: 'arcee-ai/trinity-large-preview:free', label: 'Trinity Large Preview' },
-  { id: 'minimax/minimax-m2-her:nitro', label: 'MiniMax M2-her' },
-  { id: 'writer/palmyra-x5:nitro', label: 'Palmyra X5' },
-  { id: 'openai/gpt-5.2-codex:nitro', label: 'GPT-5.2-Codex' },
-  { id: 'z-ai/glm-4.7:nitro', label: 'GLM 4.7' },
-  { id: 'mistralai/mistral-small-creative:nitro', label: 'Mistral Small Creative' },
-  { id: 'xiaomi/mimo-v2-flash:nitro', label: 'MiMo-V2-Flash' },
-  { id: 'nvidia/nemotron-3-nano-30b-a3b:nitro', label: 'Nemotron 3 Nano 30B A3B' },
-  { id: 'openai/gpt-5.2-chat:nitro', label: 'GPT-5.2 Chat' },
-  { id: 'amazon/nova-2-lite-v1:nitro', label: 'Nova 2 Lite' },
+  { id: 'moonshotai/kimi-k2.5:nitro', label: 'Kimi K2.5', free: false },
+  { id: 'deepseek/deepseek-v3.2:nitro', label: 'DeepSeek V3.2', free: false },
+  { id: 'qwen/qwen3-coder-next:nitro', label: 'Qwen3 Coder Next', free: false },
+  { id: 'deepseek/deepseek-v3.2-speciale:nitro', label: 'DeepSeek V3.2 Speciale', free: false },
+  { id: 'stepfun/step-3.5-flash:free', label: 'Step 3.5 Flash', free: true },
+  { id: 'arcee-ai/trinity-large-preview:free', label: 'Trinity Large Preview', free: true },
+  { id: 'minimax/minimax-m2-her:nitro', label: 'MiniMax M2-her', free: false },
+  { id: 'writer/palmyra-x5:nitro', label: 'Palmyra X5', free: false },
+  { id: 'openai/gpt-5.2-codex:nitro', label: 'GPT-5.2-Codex', free: false },
+  { id: 'z-ai/glm-4.7:nitro', label: 'GLM 4.7', free: false },
+  { id: 'mistralai/mistral-small-creative:nitro', label: 'Mistral Small Creative', free: false },
+  { id: 'xiaomi/mimo-v2-flash:nitro', label: 'MiMo-V2-Flash', free: false },
+  { id: 'nvidia/nemotron-3-nano-30b-a3b:nitro', label: 'Nemotron 3 Nano 30B A3B', free: false },
+  { id: 'openai/gpt-5.2-chat:nitro', label: 'GPT-5.2 Chat', free: false },
+  { id: 'amazon/nova-2-lite-v1:nitro', label: 'Nova 2 Lite', free: false },
 ];
+
+/** Модели с :free — доступны без авторизации и без списания баланса */
+export const FREE_MODEL_IDS = new Set(
+  ALLOWED_MODELS.filter((m) => m.free).map((m) => m.id),
+);
+
+export const isModelFree = (modelId: string): boolean => FREE_MODEL_IDS.has(modelId);
+
+/** Сколько внутренних токенов начислять за 1 USD стоимости (округление вверх) */
+export const USD_TO_TOKENS_RATE = 100;
 
 export const DEFAULT_MODEL = process.env.OPENROUTER_MODEL || 'moonshotai/kimi-k2.5';
 

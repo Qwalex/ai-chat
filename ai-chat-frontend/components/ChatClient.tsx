@@ -12,7 +12,9 @@ import {
   sendMessageStream,
   uploadImages,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { Markdown } from '@/components/Markdown';
+import { AuthForm } from '@/components/AuthForm';
 
 const SESSION_KEY = 'kimiChatSession';
 const MODEL_KEY = 'chatModel';
@@ -97,6 +99,8 @@ type Props = {
 };
 
 export const ChatClient = ({ defaultModelId }: Props) => {
+  const { user, token, refreshUser, logout } = useAuth();
+  const [showAuthForm, setShowAuthForm] = useState(false);
   const [models, setModels] = useState<ModelItem[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
@@ -128,23 +132,26 @@ export const ChatClient = ({ defaultModelId }: Props) => {
   }, [defaultModelId, selectedModel]);
 
   const loadConversationsList = useCallback(async () => {
-    const list = await fetchConversations();
+    const list = await fetchConversations(token);
     const session = loadSessionState();
     const filtered = list.filter((c) => session.conversationIds.includes(c.id));
     setConversations(filtered);
-  }, []);
+  }, [token]);
 
-  const loadConversation = useCallback(async (id: string) => {
-    const conv = await fetchConversation(id);
-    if (!conv) return;
-    setCurrentId(conv.id);
-    const pendingList = pendingMessagesRef.current[id] ?? [];
-    const cached = messageCacheRef.current[id] ?? conv.messages;
-    const merged = pendingList.length ? cached : [...conv.messages, ...pendingList];
-    setMessages(merged);
-    messageCacheRef.current[id] = merged;
-    loadConversationsList();
-  }, [loadConversationsList]);
+  const loadConversation = useCallback(
+    async (id: string) => {
+      const conv = await fetchConversation(id, token);
+      if (!conv) return;
+      setCurrentId(conv.id);
+      const pendingList = pendingMessagesRef.current[id] ?? [];
+      const cached = messageCacheRef.current[id] ?? conv.messages;
+      const merged = pendingList.length ? cached : [...conv.messages, ...pendingList];
+      setMessages(merged);
+      messageCacheRef.current[id] = merged;
+      loadConversationsList();
+    },
+    [loadConversationsList, token],
+  );
 
   useEffect(() => {
     loadModels();
@@ -273,13 +280,24 @@ export const ChatClient = ({ defaultModelId }: Props) => {
 
   const sendMessage = useCallback(
     async (text: string, system: string, images: string[]) => {
+      const selected = models.find((m) => m.id === selectedModel);
+      const isPaid = selected && selected.free === false;
+      if (isPaid && !user) {
+        setErrorMessage('Для платных моделей войдите в аккаунт.');
+        setShowAuthForm(true);
+        return;
+      }
+      if (isPaid && user && user.tokenBalance < 1) {
+        setErrorMessage('Недостаточно токенов на балансе. Пополните баланс.');
+        return;
+      }
       let conversationId = currentId;
       try {
         if (!conversationId) {
-          const conv = await createConversation({
-            title: 'Новый диалог',
-            system: system || undefined,
-          });
+          const conv = await createConversation(
+            { title: 'Новый диалог', system: system || undefined },
+            token,
+          );
           conversationId = conv.id;
           addConversationToSession(conversationId);
           setCurrentId(conversationId);
@@ -306,17 +324,48 @@ export const ChatClient = ({ defaultModelId }: Props) => {
         setErrorMessage(null);
 
         for (let attempt = 1; attempt <= MAX_SEND_RETRIES; attempt++) {
-          const reader = await sendMessageStream(conversationId, {
-            message: text,
-            model: selectedModel || undefined,
-            images: images.length ? images : undefined,
-          });
-          if (!reader) {
+          const result = await sendMessageStream(
+            conversationId,
+            {
+              message: text,
+              model: selectedModel || undefined,
+              images: images.length ? images : undefined,
+            },
+            token,
+          );
+          if (!result.ok) {
+            const errMsg =
+              (result.data as { error?: string })?.error ?? 'Ошибка запроса';
+            const code = (result.data as { code?: string })?.code;
+            if (code === 'AUTH_REQUIRED') {
+              setShowAuthForm(true);
+              setMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: errMsg } as ChatMessage & { retryable?: boolean },
+              ]);
+            } else if (code === 'INSUFFICIENT_BALANCE') {
+              setMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: errMsg } as ChatMessage & { retryable?: boolean },
+              ]);
+              refreshUser();
+            } else {
+              setMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: errMsg } as ChatMessage & { retryable?: boolean },
+              ]);
+            }
+            setPending(false);
+            setStreamingContent(null);
+            return;
+          }
+          if (!result.reader) {
             setErrorMessage('Нет тела ответа');
             if (attempt < MAX_SEND_RETRIES) await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
             continue;
           }
-          await processStream(reader, conversationId);
+          await processStream(result.reader, conversationId);
+          if (isPaid && user) refreshUser();
           return;
         }
         setMessages((prev) => [
@@ -343,9 +392,13 @@ export const ChatClient = ({ defaultModelId }: Props) => {
       currentId,
       messages,
       selectedModel,
+      models,
+      user,
+      token,
       addConversationToSession,
       loadConversationsList,
       processStream,
+      refreshUser,
     ],
   );
 
@@ -379,7 +432,27 @@ export const ChatClient = ({ defaultModelId }: Props) => {
 
   return (
     <div className="layout">
+      {showAuthForm && (
+        <AuthForm onClose={() => setShowAuthForm(false)} onSuccess={refreshUser} />
+      )}
       <aside className="sidebar">
+        <div className="sidebar-auth">
+          {user ? (
+            <>
+              <span className="sidebar-balance">
+                Баланс: <strong>{user.tokenBalance}</strong> токенов
+              </span>
+              <span className="sidebar-email">{user.email}</span>
+              <button type="button" className="btn-logout" onClick={logout}>
+                Выйти
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn-login" onClick={() => setShowAuthForm(true)}>
+              Войти / Регистрация
+            </button>
+          )}
+        </div>
         <button type="button" onClick={handleNewChat}>
           Новый диалог
         </button>
@@ -397,6 +470,7 @@ export const ChatClient = ({ defaultModelId }: Props) => {
             {models.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
+                {m.free ? ' (бесплатно)' : ''}
               </option>
             ))}
           </select>

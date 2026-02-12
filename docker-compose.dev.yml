@@ -1,7 +1,7 @@
 # Development (hot reload)
 services:
   backend:
-    image: node:24.13.1-alpine
+    image: node:24-bookworm-slim
     working_dir: /app
     ports:
       - "3001:3001"
@@ -12,13 +12,14 @@ services:
       - PORT=3001
       - PUBLIC_URL=http://localhost:3001
       - CORS_ORIGIN=http://localhost:3000
+      - npm_config_python=/usr/bin/python3
     volumes:
       - ./ai-chat-backend:/app
       - backend_node_modules:/app/node_modules
-    command: sh -c "npm install && npm run start:dev"
+    command: sh -c "apt-get update && apt-get install -y --no-install-recommends python3 make g++ python3-distutils && rm -rf /var/lib/apt/lists/* && mkdir -p public/uploads logs && npm install && npm run start:dev"
 
   frontend:
-    image: node:24.13.1-alpine
+    image: node:24-alpine
     working_dir: /app
     ports:
       - "3000:3000"

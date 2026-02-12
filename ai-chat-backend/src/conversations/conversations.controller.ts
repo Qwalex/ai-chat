@@ -4,14 +4,19 @@ import {
   Get,
   Param,
   Post,
+  Req,
   Res,
+  UseGuards,
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { ALLOWED_MODELS } from '../models/models.constants';
+import { ALLOWED_MODELS, isModelFree, USD_TO_TOKENS_RATE } from '../models/models.constants';
 import { OpenRouterService } from '../openrouter/openrouter.service';
+import { OptionalJwtGuard } from '../auth/optional-jwt.guard';
+import { User } from '../users/user.entity';
+import { UsersService } from '../users/users.service';
 import { buildUserMessageContent } from './conversations.service';
 import { ConversationsService } from './conversations.service';
 
@@ -77,6 +82,7 @@ export class ConversationsController {
     private readonly conversations: ConversationsService,
     private readonly openRouter: OpenRouterService,
     private readonly config: ConfigService,
+    private readonly users: UsersService,
   ) {}
 
   @Get('models')
@@ -106,10 +112,12 @@ export class ConversationsController {
   }
 
   @Post('conversations/:id/messages')
+  @UseGuards(OptionalJwtGuard)
   async streamMessage(
     @Param('id') id: string,
     @Body()
     body: { message?: string; model?: string; images?: string[] },
+    @Req() req: Request & { user?: User },
     @Res() res: Response,
   ): Promise<void> {
     const conversation = this.conversations.getOrThrow(id);
@@ -129,6 +137,25 @@ export class ConversationsController {
     }
 
     const model = this.conversations.getModel(body.model);
+    const user = req.user;
+
+    if (!isModelFree(model)) {
+      if (!user) {
+        res.status(HttpStatus.UNAUTHORIZED).json({
+          error: 'Для платных моделей необходима авторизация',
+          code: 'AUTH_REQUIRED',
+        });
+        return;
+      }
+      const balance = await this.users.getBalance(user.id);
+      if (balance < 1) {
+        res.status(HttpStatus.FORBIDDEN).json({
+          error: 'Недостаточно токенов на балансе. Пополните баланс.',
+          code: 'INSUFFICIENT_BALANCE',
+        });
+        return;
+      }
+    }
     const userMessageContent = buildUserMessageContent(messageText, imageUrls);
     const messages = this.conversations.buildMessagesPayload(
       conversation,
@@ -269,6 +296,13 @@ export class ConversationsController {
       usage: lastUsage,
     });
     this.conversations.logUsage(model, messageText, costUsd ?? 0, costRub ?? 0, costRubFinal ?? 0, rate);
+
+    if (!isModelFree(model) && user && typeof costUsd === 'number' && costUsd > 0) {
+      const tokensToDeduct = Math.ceil(costUsd * USD_TO_TOKENS_RATE);
+      if (tokensToDeduct > 0) {
+        await this.users.deductTokens(user.id, tokensToDeduct);
+      }
+    }
 
     if (isFirstUserMessage && conversation.title === 'Новый диалог') {
       this.conversations.scheduleTitleUpdate(conversation, messageText);
