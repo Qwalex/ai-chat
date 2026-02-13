@@ -1,42 +1,38 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import type { ModelItem } from '@entities/model/api';
+import { fetchModels } from '@entities/model/api';
+import type { ConversationListItem, ChatMessage } from '@entities/conversation/types';
 import {
-  type ModelItem,
-  type ConversationListItem,
-  type ChatMessage,
-  fetchModels,
   fetchConversations,
   fetchConversation,
   createConversation,
-  sendMessageStream,
-  uploadImages,
-} from '@/lib/api';
-import { useAuth } from '@/lib/auth-context';
-import { Markdown } from '@/components/Markdown';
-import { AuthForm } from '@/components/AuthForm';
+} from '@entities/conversation/api';
+import { useAuth } from '@features/auth/context/AuthProvider';
+import { AuthForm } from '@features/auth/ui/AuthForm';
+import { Markdown } from '@shared/ui/markdown';
+import { sendMessageStream, uploadImages } from '../api';
 
 const SESSION_KEY = 'kimiChatSession';
 const MODEL_KEY = 'chatModel';
 const MAX_SEND_RETRIES = 5;
 const RETRY_DELAY_MS = 1500;
 
-const loadSessionState = (): { conversationIds: string[]; activeId: string | null } => {
-  if (typeof window === 'undefined') return { conversationIds: [], activeId: null };
+const loadSessionState = (): { activeId: string | null } => {
+  if (typeof window === 'undefined') return { activeId: null };
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return { conversationIds: [], activeId: null };
+    if (!raw) return { activeId: null };
     const data = JSON.parse(raw);
-    return {
-      conversationIds: Array.isArray(data.conversationIds) ? data.conversationIds : [],
-      activeId: data.activeId ?? null,
-    };
+    return { activeId: data.activeId ?? null };
   } catch {
-    return { conversationIds: [], activeId: null };
+    return { activeId: null };
   }
 };
 
-const saveSessionState = (state: { conversationIds: string[]; activeId: string | null }): void => {
+const saveSessionState = (state: { activeId: string | null }): void => {
   if (typeof window === 'undefined') return;
   sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
 };
@@ -96,12 +92,14 @@ const renderUserContent = (content: ChatMessage['content']): React.ReactNode => 
 
 type Props = {
   defaultModelId?: string | null;
+  /** Модели, полученные на сервере (SSG) — при наличии запрос с клиента не выполняется */
+  initialModels?: ModelItem[] | null;
 };
 
-export const ChatClient = ({ defaultModelId }: Props) => {
-  const { user, token, refreshUser, logout } = useAuth();
+export const ChatClient = ({ defaultModelId, initialModels }: Props) => {
+  const { user, refreshUser, logout } = useAuth();
   const [showAuthForm, setShowAuthForm] = useState(false);
-  const [models, setModels] = useState<ModelItem[]>([]);
+  const [models, setModels] = useState<ModelItem[]>(initialModels ?? []);
   const [selectedModel, setSelectedModel] = useState('');
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
@@ -117,7 +115,10 @@ export const ChatClient = ({ defaultModelId }: Props) => {
   const historyRef = useRef<HTMLDivElement>(null);
 
   const loadModels = useCallback(async () => {
-    const list = await fetchModels();
+    const list =
+      initialModels && initialModels.length > 0
+        ? initialModels
+        : await fetchModels();
     setModels(list);
     const saved = typeof window !== 'undefined' ? sessionStorage.getItem(MODEL_KEY) : null;
     const fromPage = defaultModelId ?? saved;
@@ -129,18 +130,16 @@ export const ChatClient = ({ defaultModelId }: Props) => {
       setSelectedModel(list[0].id);
       sessionStorage.setItem(MODEL_KEY, list[0].id);
     }
-  }, [defaultModelId, selectedModel]);
+  }, [defaultModelId, initialModels, selectedModel]);
 
   const loadConversationsList = useCallback(async () => {
-    const list = await fetchConversations(token);
-    const session = loadSessionState();
-    const filtered = list.filter((c) => session.conversationIds.includes(c.id));
-    setConversations(filtered);
-  }, [token]);
+    const list = await fetchConversations();
+    setConversations(list);
+  }, []);
 
   const loadConversation = useCallback(
     async (id: string) => {
-      const conv = await fetchConversation(id, token);
+      const conv = await fetchConversation(id);
       if (!conv) return;
       setCurrentId(conv.id);
       const pendingList = pendingMessagesRef.current[id] ?? [];
@@ -150,7 +149,7 @@ export const ChatClient = ({ defaultModelId }: Props) => {
       messageCacheRef.current[id] = merged;
       loadConversationsList();
     },
-    [loadConversationsList, token],
+    [loadConversationsList],
   );
 
   useEffect(() => {
@@ -172,15 +171,7 @@ export const ChatClient = ({ defaultModelId }: Props) => {
   }, [loadConversation]);
 
   const addConversationToSession = useCallback((id: string) => {
-    const session = loadSessionState();
-    if (session.conversationIds.includes(id)) {
-      saveSessionState({ ...session, activeId: id });
-      return;
-    }
-    saveSessionState({
-      conversationIds: [...session.conversationIds, id],
-      activeId: id,
-    });
+    saveSessionState({ activeId: id });
   }, []);
 
   const handleNewChat = useCallback(() => {
@@ -189,7 +180,7 @@ export const ChatClient = ({ defaultModelId }: Props) => {
     setSystemPrompt('');
     setMessageInput('');
     setErrorMessage(null);
-    saveSessionState({ ...loadSessionState(), activeId: null });
+    saveSessionState({ activeId: null });
   }, []);
 
   const handleSelectConversation = useCallback(
@@ -296,7 +287,6 @@ export const ChatClient = ({ defaultModelId }: Props) => {
         if (!conversationId) {
           const conv = await createConversation(
             { title: 'Новый диалог', system: system || undefined },
-            token,
           );
           conversationId = conv.id;
           addConversationToSession(conversationId);
@@ -331,7 +321,6 @@ export const ChatClient = ({ defaultModelId }: Props) => {
               model: selectedModel || undefined,
               images: images.length ? images : undefined,
             },
-            token,
           );
           if (!result.ok) {
             const errMsg =
@@ -394,7 +383,6 @@ export const ChatClient = ({ defaultModelId }: Props) => {
       selectedModel,
       models,
       user,
-      token,
       addConversationToSession,
       loadConversationsList,
       processStream,
@@ -443,6 +431,9 @@ export const ChatClient = ({ defaultModelId }: Props) => {
                 Баланс: <strong>{user.tokenBalance}</strong> токенов
               </span>
               <span className="sidebar-email">{user.email}</span>
+              <Link href="/history" className="sidebar-link-history">
+                История расходов
+              </Link>
               <button type="button" className="btn-logout" onClick={logout}>
                 Выйти
               </button>
@@ -593,4 +584,3 @@ export const ChatClient = ({ defaultModelId }: Props) => {
     </div>
   );
 };
-

@@ -335,6 +335,16 @@ button:disabled {
   font-size: 13px;
 }
 
+.sidebar-link-history {
+  font-size: 14px;
+  color: #2b6ef2;
+  text-decoration: none;
+}
+
+.sidebar-link-history:hover {
+  text-decoration: underline;
+}
+
 .auth-form-overlay {
   position: fixed;
   inset: 0;
@@ -652,6 +662,38 @@ button:disabled {
   border-radius: 8px;
   overflow-x: auto;
   margin: 0 0 14px;
+}
+
+.balance-history-balance {
+  margin-bottom: 20px;
+  font-size: 16px;
+}
+
+.balance-history-table-wrap {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.balance-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.balance-history-table th,
+.balance-history-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.balance-history-table th {
+  font-weight: 600;
+  background: #f8f8f8;
+}
+
+.balance-history-table tbody tr:hover {
+  background: #fafafa;
 }
 
 @media (max-width: 900px) {

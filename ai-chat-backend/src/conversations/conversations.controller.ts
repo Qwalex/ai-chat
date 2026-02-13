@@ -12,13 +12,18 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { ALLOWED_MODELS, isModelFree, USD_TO_TOKENS_RATE } from '../models/models.constants';
+import { Throttle } from '@nestjs/throttler';
+import { ALLOWED_MODELS, isModelFree, getModelLabel, USD_TO_TOKENS_RATE } from '../models/models.constants';
 import { OpenRouterService } from '../openrouter/openrouter.service';
 import { OptionalJwtGuard } from '../auth/optional-jwt.guard';
 import { User } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
+import { BalanceHistoryService } from '../balance-history/balance-history.service';
 import { buildUserMessageContent } from './conversations.service';
 import { ConversationsService } from './conversations.service';
+
+/** Лимит: 40 сообщений в минуту с одного IP (гости и пользователи), защита от спама бесплатных моделей */
+const MESSAGES_THROTTLE = { default: { limit: 40, ttl: 60_000 } };
 
 const USD_TO_RUB_RATE = Number(process.env.USD_TO_RUB_RATE) || 90;
 const USD_RATE_API = process.env.USD_RATE_API || 'https://open.er-api.com/v6/latest/USD';
@@ -77,12 +82,14 @@ const sendSSE = (res: Response, event: string, data: unknown): void => {
 const openRouterErrorJson = (message: string) => ({ error: message, source: 'openrouter' });
 
 @Controller('api')
+@UseGuards(OptionalJwtGuard)
 export class ConversationsController {
   constructor(
     private readonly conversations: ConversationsService,
     private readonly openRouter: OpenRouterService,
     private readonly config: ConfigService,
     private readonly users: UsersService,
+    private readonly balanceHistory: BalanceHistoryService,
   ) {}
 
   @Get('models')
@@ -91,14 +98,20 @@ export class ConversationsController {
   }
 
   @Get('conversations')
-  listConversations() {
-    return { conversations: this.conversations.listConversations() };
+  async listConversations(@Req() req: Request & { user?: User }) {
+    const userId = req.user?.id;
+    const conversations = await this.conversations.listConversations(userId);
+    return { conversations };
   }
 
   @Post('conversations')
   @HttpCode(HttpStatus.CREATED)
-  createConversation(@Body() body: { title?: string; system?: string }) {
-    const conversation = this.conversations.createConversation({
+  async createConversation(
+    @Req() req: Request & { user?: User },
+    @Body() body: { title?: string; system?: string },
+  ) {
+    const userId = req.user?.id;
+    const conversation = await this.conversations.createConversation(userId, {
       title: body.title,
       system: body.system,
     });
@@ -106,13 +119,17 @@ export class ConversationsController {
   }
 
   @Get('conversations/:id')
-  getConversation(@Param('id') id: string) {
-    const conversation = this.conversations.getOrThrow(id);
+  async getConversation(
+    @Param('id') id: string,
+    @Req() req: Request & { user?: User },
+  ) {
+    const userId = req.user?.id;
+    const conversation = await this.conversations.getOrThrow(id, userId);
     return { conversation };
   }
 
   @Post('conversations/:id/messages')
-  @UseGuards(OptionalJwtGuard)
+  @Throttle(MESSAGES_THROTTLE)
   async streamMessage(
     @Param('id') id: string,
     @Body()
@@ -120,7 +137,8 @@ export class ConversationsController {
     @Req() req: Request & { user?: User },
     @Res() res: Response,
   ): Promise<void> {
-    const conversation = this.conversations.getOrThrow(id);
+    const userId = req.user?.id;
+    const conversation = await this.conversations.getOrThrow(id, userId);
     const messageText = typeof body.message === 'string' ? body.message : '';
     const imageUrls = Array.isArray(body.images) ? body.images : [];
     if (!messageText.trim() && imageUrls.length === 0) {
@@ -163,7 +181,7 @@ export class ConversationsController {
       model,
     );
     const isFirstUserMessage = !this.conversations.hasUserMessages(conversation);
-    this.conversations.appendUserMessage(conversation, userMessageContent);
+    await this.conversations.appendUserMessage(conversation, userMessageContent);
 
     const apiKey = this.config.get<string>('OPENROUTER_API_KEY');
     const openRouterHeaders: Record<string, string> = {
@@ -189,14 +207,14 @@ export class ConversationsController {
         }),
       });
     } catch (error: unknown) {
-      this.conversations.popLastMessage(conversation);
+      await this.conversations.popLastMessage(conversation);
       const errMessage = error instanceof Error ? error.message : 'Request failed';
       res.status(HttpStatus.INTERNAL_SERVER_ERROR).json(openRouterErrorJson(errMessage));
       return;
     }
 
     if (!openRouterRes.ok) {
-      this.conversations.popLastMessage(conversation);
+      await this.conversations.popLastMessage(conversation);
       const errBody = await openRouterRes.text();
       let errMessage = 'Request failed';
       try {
@@ -275,7 +293,7 @@ export class ConversationsController {
     }
 
     if (streamError) {
-      this.conversations.popLastMessage(conversation);
+      await this.conversations.popLastMessage(conversation);
       res.end();
       return;
     }
@@ -288,7 +306,7 @@ export class ConversationsController {
     const rate = await getUsdToRubRate();
     const { costRub, costRubFinal } = calculateRub(costUsd, rate, COMMISSION_MULTIPLIER);
     const text = normalizeMessageContent(fullContent) || '';
-    this.conversations.appendAssistantMessage(conversation, text, {
+    await this.conversations.appendAssistantMessage(conversation, text, {
       costUsd: costUsd ?? undefined,
       costRub: costRub ?? undefined,
       costRubFinal: costRubFinal ?? undefined,
@@ -301,11 +319,18 @@ export class ConversationsController {
       const tokensToDeduct = Math.ceil(costUsd * USD_TO_TOKENS_RATE);
       if (tokensToDeduct > 0) {
         await this.users.deductTokens(user.id, tokensToDeduct);
+        await this.balanceHistory.record({
+          userId: user.id,
+          modelId: model,
+          modelLabel: getModelLabel(model),
+          tokensSpent: tokensToDeduct,
+          costUsd,
+        });
       }
     }
 
     if (isFirstUserMessage && conversation.title === 'Новый диалог') {
-      this.conversations.scheduleTitleUpdate(conversation, messageText);
+      await this.conversations.scheduleTitleUpdate(conversation, messageText);
     }
 
     sendSSE(res, 'done', {

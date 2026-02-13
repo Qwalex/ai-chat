@@ -20,16 +20,22 @@
     "@openrouter/sdk": "^0.8.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.6.2",
+    "cookie-parser": "^1.4.7",
     "marked": "^17.0.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "typeorm": "^0.3.28"
+    "typeorm": "^0.3.28",
+    "@nestjs/throttler": "^6.0.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "helmet": "^8.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
     "@types/bcrypt": "^5.0.2",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/passport-jwt": "^4.0.1",

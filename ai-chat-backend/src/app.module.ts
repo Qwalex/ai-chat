@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
 import { ConversationsModule } from './conversations/conversations.module';
 import { ModelsModule } from './models/models.module';
@@ -12,10 +14,20 @@ import { ChatModule } from './chat/chat.module';
 import { WriteLogModule } from './write-log/write-log.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { BalanceHistoryModule } from './balance-history/balance-history.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 200 }]),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: [
+        process.env.NODE_ENV && `.env.${process.env.NODE_ENV}.local`,
+        process.env.NODE_ENV && `.env.${process.env.NODE_ENV}`,
+        '.env.local',
+        '.env',
+      ].filter((p): p is string => Boolean(p)),
+    }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
@@ -35,10 +47,14 @@ import { UsersModule } from './users/users.module';
     OpenRouterModule,
     UsersModule,
     AuthModule,
+    BalanceHistoryModule,
     ConversationsModule,
     BlogModule,
     UploadModule,
     ChatModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import './globals.css';
-import { AuthProvider } from '@/lib/auth-context';
+import { AuthProvider } from '@features/auth/context/AuthProvider';
+import { getInitialUser } from '@features/auth/getInitialUser';
 
 export const metadata: Metadata = {
   title: 'AI онлайн бесплатно — ИИ онлайн, множество моделей | Чат с ИИ',
@@ -8,11 +10,17 @@ export const metadata: Metadata = {
     'ИИ онлайн бесплатно: веб‑чат с выбором множества нейросетей — Kimi, DeepSeek, Qwen, GPT, Mistral и другие. AI онлайн без регистрации.',
 };
 
-export default function RootLayout({
+const ACCESS_TOKEN_COOKIE = 'accessToken';
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+  const initialUser = await getInitialUser(accessToken);
+
   return (
     <html lang="ru">
       <head>
@@ -27,7 +35,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider initialUser={initialUser}>{children}</AuthProvider>
       </body>
     </html>
   );

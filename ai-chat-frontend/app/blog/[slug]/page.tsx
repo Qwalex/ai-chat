@@ -1,34 +1,22 @@
-import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { fetchBlogPost } from '@/lib/api';
+import BlogPostPage from '@views/blog-post/BlogPostPage';
+import { fetchBlogPost, fetchBlogPosts } from '@entities/blog-post/api';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-type Props = { params: { slug: string } };
+export const generateStaticParams = async () => {
+  try {
+    const posts = await fetchBlogPosts();
+    return posts.map((p) => ({ slug: p.slug }));
+  } catch {
+    return [];
+  }
+};
 
-export default async function BlogPostPage({ params }: Props) {
-  const { slug } = params;
-  const post = await fetchBlogPost(slug);
-  if (!post) notFound();
-
-  return (
-    <main className="container container--blog">
-      <nav className="blog-nav">
-        <Link href="/">Главная</Link> · <Link href="/blog">Блог</Link>
-      </nav>
-      <div className="blog-content">
-        <article className="blog-article" dangerouslySetInnerHTML={{ __html: post.html }} />
-      </div>
-    </main>
-  );
-}
-
-export async function generateMetadata({ params }: Props) {
-  const { slug } = params;
+export const generateMetadata = async ({ params }: { params: Promise<{ slug: string }> }) => {
+  const { slug } = await params;
   const post = await fetchBlogPost(slug);
   if (!post) return { title: 'Блог | Чат с ИИ' };
-  return {
-    title: `${post.title} | Блог | Чат с ИИ`,
-  };
-}
+  return { title: `${post.title} | Блог | Чат с ИИ` };
+};
 
+export default BlogPostPage;

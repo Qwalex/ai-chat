@@ -1,0 +1,1 @@
+export { BlogFeed } from './BlogFeed';

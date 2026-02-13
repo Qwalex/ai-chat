@@ -1,6 +1,6 @@
 export const ALLOWED_MODELS = [
-  { id: 'moonshotai/kimi-k2.5:nitro', label: 'Kimi K2.5', free: false },
   { id: 'deepseek/deepseek-v3.2:nitro', label: 'DeepSeek V3.2', free: false },
+  { id: 'moonshotai/kimi-k2.5:nitro', label: 'Kimi K2.5', free: false },
   { id: 'qwen/qwen3-coder-next:nitro', label: 'Qwen3 Coder Next', free: false },
   { id: 'deepseek/deepseek-v3.2-speciale:nitro', label: 'DeepSeek V3.2 Speciale', free: false },
   { id: 'stepfun/step-3.5-flash:free', label: 'Step 3.5 Flash', free: true },
@@ -22,6 +22,9 @@ export const FREE_MODEL_IDS = new Set(
 );
 
 export const isModelFree = (modelId: string): boolean => FREE_MODEL_IDS.has(modelId);
+
+export const getModelLabel = (modelId: string): string =>
+  ALLOWED_MODELS.find((m) => m.id === modelId)?.label ?? modelId;
 
 /** Сколько внутренних токенов начислять за 1 USD стоимости (округление вверх) */
 export const USD_TO_TOKENS_RATE = 100;

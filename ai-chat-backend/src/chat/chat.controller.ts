@@ -1,8 +1,16 @@
-import { Body, Controller, Post, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  InternalServerErrorException,
+  BadRequestException,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { getSystemPromptForModel } from '../models/models.constants';
 import { OpenRouterService } from '../openrouter/openrouter.service';
 import { ConversationsService } from '../conversations/conversations.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 const USD_TO_RUB_RATE = Number(process.env.USD_TO_RUB_RATE) || 90;
 const USD_RATE_API = process.env.USD_RATE_API || 'https://open.er-api.com/v6/latest/USD';
@@ -61,6 +69,7 @@ export class ChatController {
   ) {}
 
   @Post('chat')
+  @UseGuards(JwtAuthGuard)
   async chat(
     @Body() body: { message?: string; system?: string; model?: string },
   ): Promise<unknown> {

@@ -5,7 +5,20 @@
 ## Структура
 
 - **ai-chat-backend** — NestJS API (OpenRouter, диалоги, блог, загрузка изображений, **авторизация и баланс в токенах**)
-- **ai-chat-frontend** — Next.js SPA (чат, страницы моделей, блог, вход/регистрация)
+- **ai-chat-frontend** — Next.js SPA (чат, страницы моделей, блог, вход/регистрация). Структура кода — **Feature-Sliced Design** (см. ниже).
+
+### Фронтенд (FSD)
+
+В `ai-chat-frontend` используется [Feature-Sliced Design](https://feature-sliced.design/):
+
+- **src/shared** — переиспользуемое: `lib` (constants, slug), `api/base`, `ui/markdown`
+- **src/entities** — сущности: model, user, conversation, blog-post (типы + API)
+- **src/features** — сценарии: auth (форма, контекст, API), chat (ChatClient, API сообщений/загрузки)
+- **src/widgets** — блоки UI: ModelLinksList, BlogFeed
+- **src/views** — композиции страниц: home, model, blog-list, blog-post
+- **app/** — роуты Next.js (тонкий слой: конфиг сегмента + импорт view)
+
+Алиасы: `@shared/*`, `@entities/*`, `@features/*`, `@widgets/*`, `@views/*`.
 
 ### Авторизация и баланс
 

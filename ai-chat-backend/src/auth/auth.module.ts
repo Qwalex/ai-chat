@@ -13,10 +13,16 @@ import { UsersModule } from '../users/users.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'dev-secret-change-in-production',
-        signOptions: { expiresIn: '7d' },
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (process.env.NODE_ENV === 'production' && !secret) {
+          throw new Error('JWT_SECRET is required in production');
+        }
+        return {
+          secret: secret || 'dev-secret-change-in-production',
+          signOptions: { expiresIn: '7d' },
+        };
+      },
       inject: [ConfigService],
     }),
   ],

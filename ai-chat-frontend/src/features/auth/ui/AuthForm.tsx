@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
+import { useAuth } from '../context/AuthProvider';
 
 type Mode = 'login' | 'register';
 
@@ -60,14 +60,14 @@ export const AuthForm = ({
             />
           </label>
           <label className="field">
-            Пароль
+            Пароль (не менее 8 символов)
             <input
               type="password"
               autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={8}
             />
           </label>
           <button type="submit" disabled={pending}>

@@ -7,3 +7,18 @@ Cost: $0 → 0₽ → 0₽ (rate: 77.204496)
 Use stepfun/step-3.5-flash:free to generate response: еуые
 Cost: $0 → 0₽ → 0₽ (rate: 77.204496)
 ---
+Use deepseek/deepseek-v3.2:nitro to generate response: test
+Cost: $0.000151775 → 0.011723119213₽ → 0.017584678819500002₽ (rate: 77.24012)
+---
+Use deepseek/deepseek-v3.2:nitro to generate response: какие ты знаешь сложные математические задачи
+Cost: $0.000370298 → 0.028601861955760005₽ → 0.04290279293364001₽ (rate: 77.24012)
+---
+Use deepseek/deepseek-v3.2:nitro to generate response: привет
+Cost: $0.000094044 → 0.00726396984528₽ → 0.01089595476792₽ (rate: 77.24012)
+---
+Use stepfun/step-3.5-flash:free | Cost: $0 → 0₽ → 0₽ (rate: 77.24012)
+---
+Use stepfun/step-3.5-flash:free | Cost: $0 → 0₽ → 0₽ (rate: 77.24012)
+---
+Use deepseek/deepseek-v3.2:nitro | Cost: $0.000119113 → 0.009200302413560001₽ → 0.013800453620340002₽ (rate: 77.24012)
+---
