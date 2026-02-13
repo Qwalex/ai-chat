@@ -82,9 +82,11 @@ export class ChatController {
     messages.push({ role: 'user', content: message });
     try {
       const result = await client.chat.send({
-        model,
-        messages: messages as unknown as Parameters<typeof client.chat.send>[0]['messages'],
-        stream: false,
+        chatGenerationParams: {
+          model,
+          messages,
+          stream: false,
+        },
       });
       const rawContent = result?.choices?.[0]?.message?.content;
       const text = normalizeMessageContent(rawContent) || '';

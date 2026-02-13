@@ -162,15 +162,17 @@ export class ConversationsService {
     if (!client) return null;
     try {
       const result = await client.chat.send({
-        model: 'arcee-ai/trinity-large-preview:free',
-        messages: [
-          {
-            role: 'user',
-            content: `Сформулируй короткое название диалога (3-6 слов, до 40 символов). Одна строка. Без кавычек и точек. По фразе: "${message}"`,
-          },
-        ],
-        temperature: 0.2,
-        stream: false,
+        chatGenerationParams: {
+          model: 'arcee-ai/trinity-large-preview:free',
+          messages: [
+            {
+              role: 'user',
+              content: `Сформулируй короткое название диалога (3-6 слов, до 40 символов). Одна строка. Без кавычек и точек. По фразе: "${message}"`,
+            },
+          ],
+          temperature: 0.2,
+          stream: false,
+        },
       });
       const content = result?.choices?.[0]?.message?.content;
       return normalizeTitle(normalizeMessageContent(content));
