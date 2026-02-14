@@ -1,0 +1,6 @@
+# Dev: только Node и WORKDIR, без нативных зависимостей
+FROM node:24-alpine
+
+WORKDIR /app
+
+EXPOSE 3000

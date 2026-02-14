@@ -1,0 +1,9 @@
+FROM node:24-bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ python3-distutils \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV npm_config_python=/usr/bin/python3
+WORKDIR /app
+RUN mkdir -p public/uploads logs

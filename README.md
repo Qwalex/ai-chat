@@ -35,8 +35,8 @@
 
 ```bash
 # Создайте ai-chat-backend/.env с OPENROUTER_API_KEY и др. (см. ai-chat-backend/.env.example)
-# Опционально: .env в корне с NEXT_PUBLIC_API_URL, PUBLIC_URL, CORS_ORIGIN
-docker compose up -d --build
+# Переменные для compose (PUBLIC_URL, CORS_ORIGIN, NEXT_PUBLIC_API_URL) — в .env.production
+docker compose --env-file .env.production up -d --build
 ```
 
 - Фронтенд: http://localhost:3000  

@@ -1,5 +1,3 @@
-import { getBaseUrl } from '@shared/api/base';
-
 const jsonCredentialOptions: RequestInit = {
   credentials: 'include',
   headers: { 'Content-Type': 'application/json' },
@@ -9,7 +7,7 @@ export const sendMessageStream = async (
   conversationId: string,
   params: { message: string; model?: string; images?: string[] },
 ): Promise<{ reader: ReadableStreamDefaultReader<Uint8Array> | null; ok: boolean; data?: unknown }> => {
-  const res = await fetch(`${getBaseUrl()}/api/conversations/${conversationId}/messages`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/${conversationId}/messages`, {
     ...jsonCredentialOptions,
     method: 'POST',
     body: JSON.stringify({
@@ -28,7 +26,7 @@ export const sendMessageStream = async (
 };
 
 export const uploadImages = async (dataUrls: string[]): Promise<string[]> => {
-  const res = await fetch(`${getBaseUrl()}/api/upload-images`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload-images`, {
     ...jsonCredentialOptions,
     method: 'POST',
     body: JSON.stringify({ images: dataUrls }),

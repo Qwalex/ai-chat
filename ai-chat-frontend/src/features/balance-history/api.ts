@@ -1,5 +1,3 @@
-import { getBaseUrl } from '@shared/api/base';
-
 export type BalanceHistoryItem = {
   id: string;
   modelId: string;
@@ -13,7 +11,7 @@ export type BalanceHistoryResponse = {
 };
 
 export const fetchBalanceHistory = async (): Promise<BalanceHistoryResponse> => {
-  const res = await fetch(`${getBaseUrl()}/api/balance-history`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/balance-history`, {
     credentials: 'include',
   });
   if (!res.ok) {

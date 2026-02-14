@@ -1,4 +1,3 @@
-import { getBaseUrl } from '@shared/api/base';
 import type { UserInfo } from '@entities/user/types';
 
 export type { UserInfo } from '@entities/user/types';
@@ -12,7 +11,7 @@ export const authRegister = async (
   email: string,
   password: string,
 ): Promise<{ user: UserInfo }> => {
-  const res = await fetch(`${getBaseUrl()}/api/auth/register`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
     ...authFetchOptions,
     method: 'POST',
     body: JSON.stringify({ email, password }),
@@ -27,7 +26,7 @@ export const authLogin = async (
   email: string,
   password: string,
 ): Promise<{ user: UserInfo }> => {
-  const res = await fetch(`${getBaseUrl()}/api/auth/login`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
     ...authFetchOptions,
     method: 'POST',
     body: JSON.stringify({ email, password }),
@@ -39,7 +38,7 @@ export const authLogin = async (
 };
 
 export const authMe = async (): Promise<{ user: UserInfo }> => {
-  const res = await fetch(`${getBaseUrl()}/api/auth/me`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
     credentials: 'include',
   });
   const data = await res.json().catch(() => ({}));
@@ -49,7 +48,7 @@ export const authMe = async (): Promise<{ user: UserInfo }> => {
 };
 
 export const authLogout = async (): Promise<void> => {
-  await fetch(`${getBaseUrl()}/api/auth/logout`, {
+  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout`, {
     ...authFetchOptions,
     method: 'POST',
   });
